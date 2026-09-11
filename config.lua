@@ -1,17 +1,17 @@
 Config = {
+    Debug = false,
     FuelResource = 'LegacyFuel',
 
     JobGenerationTimer = 2, -- How often a job is generated in minutes
     MaxJobs = 50,
 
-    FragileChanceGenerator = 10,
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 
     XPReward = 75, -- XP reward for completing a job
 
     Multipliers = {
-        FragileXPMultiplier = 1.5, --XP Multiplier for fragile jobs
-        TimedXPMultiplier = 1.5, -- XP Multiplier for timed jobs  (Maybe rename to quick job)
+        FragileXPMultiplier = 1.5, -- XP multiplier for skilled cargo delivered cleanly and on time
+        TimedXPMultiplier = 1.5, -- XP multiplier for expedited cargo delivered cleanly and on time
     },
 
     PayPerMeter = 1.7,
@@ -22,10 +22,10 @@ Config = {
 
     DefaultTruck = 'hauler', -- Default truck for players to use
     Trucks = {
-        {name = 'hauler', price = 0 }, -- Default truck, maybe make default boolean value
-        {name = 'phantom', price = 25000 },
-        {name = 'packer', price = 50000 },
-        {name = 'phantom3', price = 100000 }, -- Bigger and accelerates quicker
+        { name = 'hauler', label = 'Hauler', price = 0 },
+        { name = 'phantom', label = 'Phantom', price = 25000 },
+        { name = 'packer', label = 'Packer', price = 50000 },
+        { name = 'phantom3', label = 'Phantom Custom', price = 100000 },
     },
 
     DeliveryTypes = { -- Potentially rename to cargo     
@@ -343,44 +343,3 @@ Config.Coords = {
         vector4(955.85, -22.89, 78.77, 147.51),
     },
 }
-
-local QBCore = exports['qb-core']:GetCoreObject()
-function CheckTrailer(coords, heading, trailer, source)
-    local trailerHeading = GetEntityHeading(trailer)
-    local ped = IsDuplicityVersion() and GetPlayerPed(source) or PlayerPedId()
-
-    local headingDiff = trailerHeading - heading -- Get difference between trailer heading and delivery heading
-    if headingDiff < -180 then
-        headingDiff = headingDiff + 360
-    elseif headingDiff > 180 then
-        headingDiff = headingDiff - 360
-    end
-    headingDiff = math.abs(headingDiff) -- Get absolute value for when difference is below 0
-
-    local coordDiff = #(GetEntityCoords(trailer) - GetEntityCoords(ped)) -- Used to calculate near half of trailer size due to coordinates being at the centre of the trailer
-    local trailerDiff = #(GetEntityCoords(trailer) - coords)
-    local pedDiff = #(GetEntityCoords(ped) - coords)
-
-    if pedDiff <= coordDiff and trailerDiff <= 5 and headingDiff <= 10 then
-        return true
-    end
-end
-
--- Initialises and formats rep data
-function GetRep(source)
-    local PlayerData = IsDuplicityVersion() and QBCore.Functions.GetPlayer(source).PlayerData or QBCore.Functions.GetPlayerData()
-    local rep = PlayerData.metadata.rep
-    local truckerRep = rep.trucker or {}
-    truckerRep.skills = truckerRep.skills or {
-        distance = 1,
-        cargo = 1,
-        time = 1,
-    }
-    truckerRep.activeTruck = truckerRep.activeTruck or Config.DefaultTruck
-    truckerRep.trucks = truckerRep.trucks or {}
-    truckerRep.skillPoints = truckerRep.skillPoints or 0
-    truckerRep.XP = truckerRep.XP or 0
-    rep.trucker = truckerRep
-
-    return rep
-end

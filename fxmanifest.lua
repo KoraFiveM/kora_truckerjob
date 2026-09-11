@@ -3,32 +3,27 @@ game 'gta5'
 lua54 'yes'
 author 'qwerty1Verified'
 description 'Trucking job to haul cargo for money with an integrated skill system'
-version '1.0.0'
+version '1.1.0'
+
+dependencies {
+    'qblib',
+    'qbcore',
+    'qbtarget',
+    'qbvehiclekeys',
+}
+
+shared_script '@qblib/init.lua'
 
 shared_scripts {
-    '@qb-core/shared/locale.lua',
-    'locales/en.lua',
+    '@qbcore/init.lua',
     'config.lua',
 }
 
-client_scripts {
-    '@PolyZone/client.lua',
-    '@PolyZone/CircleZone.lua',
-    'client/client.lua',
-    'client/target.lua',
-}
+client_script 'client/client.lua'
 
-server_scripts {
-    '@oxmysql/lib/MySQL.lua',
-    'server.lua',
-}
-
-ui_page 'html/index.html'
+server_script 'server.lua'
 
 files {
-    'html/index.html',
-    'html/app.js',
-    'html/style.css',
     'html/images/**/*.webp',
 }
 

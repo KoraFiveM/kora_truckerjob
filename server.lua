@@ -1,268 +1,402 @@
-local QBCore = exports['qb-core']:GetCoreObject()
-local jobs = setmetatable({}, {__len = function(t)
-    local length = 0
-    for k, v in pairs(t) do
-        length += 1
-    end
-    return length
-end})
+local jobs = {}
+local jobCount = 0
+local spawnedVehicles = {}
 
-local skillDistances = { -- Maybe move to config?
-    [1] = 1500,
-    [2] = 3000, -- Lvl 2 0-3000
-    [3] = 5000,
-    [4] = 7000,
-}
-local skillTimeMultipliers = {
-    [1] = 1,
-    [2] = 1.2,
-    [3] = 1.4,
-    [4] = 1.6,
-}
+local skillDistances = { 1500, 3000, 5000, 7000 }
+local truckDefinition
+
+local function isInteger(value)
+    return type(value) == 'number' and value % 1 == 0
+end
+
+local function coordsTable(coords)
+    return { x = coords.x, y = coords.y, z = coords.z, w = coords.w or 0.0 }
+end
+
+local function playerIsNear(source, coords, maximumDistance)
+    local ped = GetPlayerPed(source)
+    if not ped or ped == 0 then return false end
+    return #(GetEntityCoords(ped) - vector3(coords.x, coords.y, coords.z)) <= maximumDistance
+end
+
+local function normaliseTruckerRep(source)
+    local rep = exports.qbcore:getMetaData(source, 'rep') or {}
+    local trucker = type(rep.trucker) == 'table' and rep.trucker or {}
+    local skills = type(trucker.skills) == 'table' and trucker.skills or {}
+    local changed = rep.trucker ~= trucker or trucker.skills ~= skills
+
+    for _, skill in ipairs({ 'distance', 'cargo', 'time' }) do
+        local level = tonumber(skills[skill])
+        if not level or level % 1 ~= 0 or level < 1 or level > 4 then
+            skills[skill] = 1
+            changed = true
+        elseif skills[skill] ~= level then
+            skills[skill] = level
+            changed = true
+        end
+    end
+
+    if type(trucker.trucks) ~= 'table' then
+        trucker.trucks = {}
+        changed = true
+    end
+    if type(trucker.activeTruck) ~= 'string' then
+        trucker.activeTruck = Config.DefaultTruck
+        changed = true
+    end
+    if not isInteger(trucker.skillPoints) or trucker.skillPoints < 0 then
+        trucker.skillPoints = 0
+        changed = true
+    end
+    if type(trucker.XP) ~= 'number' or trucker.XP < 0 then
+        trucker.XP = 0
+        changed = true
+    end
+
+    trucker.skills = skills
+    if not trucker.trucks[Config.DefaultTruck] then
+        trucker.trucks[Config.DefaultTruck] = true
+        changed = true
+    end
+    if not truckDefinition(trucker.activeTruck) or not trucker.trucks[trucker.activeTruck] then
+        trucker.activeTruck = Config.DefaultTruck
+        changed = true
+    end
+    rep.trucker = trucker
+
+    if changed then exports.qbcore:setMetaData(source, 'rep', rep) end
+    return rep, trucker
+end
+
+local function setTruckerRep(source, rep, trucker)
+    rep.trucker = trucker
+    return exports.qbcore:setMetaData(source, 'rep', rep)
+end
+
+local function clientJob(id, job)
+    return {
+        id = id,
+        coords = coordsTable(job.coords),
+        distance = job.distance,
+        distanceLevel = job.distanceLevel,
+        cargo = job.cargo,
+        image = job.image,
+        cargoLevel = job.cargoLevel,
+        timeLevel = job.timeLevel,
+        active = job.active ~= false,
+        deadline = job.deadline,
+    }
+end
+
+local function activeJobFor(source)
+    for id, job in pairs(jobs) do
+        if job.active == source then return id, job end
+    end
+end
+
+local function jobsForClient(source)
+    local result = {}
+    local activeJobId = activeJobFor(source)
+    for id, job in pairs(jobs) do result[#result + 1] = clientJob(id, job) end
+    table.sort(result, function(left, right)
+        if left.active ~= right.active then return not left.active end
+        if left.distance ~= right.distance then return left.distance < right.distance end
+        return left.id < right.id
+    end)
+    return result, activeJobId
+end
+
+local function jobDistanceLevel(distance)
+    for level = 1, #skillDistances do
+        if distance <= skillDistances[level] then return level end
+    end
+    return #skillDistances
+end
 
 local function generateJob()
-    local deliveryCoords = Config.Coords.Deliveries[math.random(1, #Config.Coords.Deliveries)] -- Generates random delivery coordinates
-    local skillLevel = math.random(1, #Config.DeliveryTypes)
-    local jobLevel = Config.DeliveryTypes[skillLevel] -- Selects a random delivery skill level
-    local jobInformation = jobLevel[math.random(1, #jobLevel)] -- Generates a random job from the level
+    local deliveryCoords = Config.Coords.Deliveries[math.random(1, #Config.Coords.Deliveries)]
+    local cargoLevel = math.random(1, #Config.DeliveryTypes)
+    local cargoOptions = Config.DeliveryTypes[cargoLevel]
+    local cargo = cargoOptions[math.random(1, #cargoOptions)]
+    local distance = math.floor(#(deliveryCoords - Config.Coords.JobStation))
+    local id
 
-    local job = {
+    repeat
+        id = exports.qbcore:randomStr(3) .. exports.qbcore:randomInt(3)
+    until not jobs[id]
+
+    jobs[id] = {
         coords = deliveryCoords,
-        distance = math.floor(#(deliveryCoords - Config.Coords.JobStation)),
+        distance = distance,
+        distanceLevel = jobDistanceLevel(distance),
         cargo = {
-            label = jobInformation.jobLabels[math.random(1, #jobInformation.jobLabels)],
-            trailer = jobInformation.trailer,
+            label = cargo.jobLabels[math.random(1, #cargo.jobLabels)],
+            trailer = cargo.trailer,
         },
-        image = jobInformation.image,
-        cargoLevel = skillLevel, -- Maybe seperate and allow for random actual fragile cargo to go with multiplier?
+        image = cargo.image,
+        cargoLevel = cargoLevel,
+        timeLevel = math.random(1, 100) <= Config.TimedChanceGenerator and math.random(2, 4) or nil,
+        active = false,
     }
+    jobCount = jobCount + 1
+end
 
-    -- Determine which level of distance the job is
-    -- Used in the front end to determine if eligible rather than calculating boundaries
-    job.distanceLevel = 1
-    for k, v in pairs(skillDistances) do
-        if k == #skillDistances then
-            if job.distance > skillDistances[k] then
-                job.distanceLevel = k
-                break
-            end
-        end
-    
-        if job.distance > v and job.distance <= (skillDistances[k + 1] or skillDistances[k]) then
-            job.distanceLevel = k + 1
-            break
+local function deleteEntity(entity)
+    if entity and entity ~= 0 and DoesEntityExist(entity) then DeleteEntity(entity) end
+end
+
+local function vehicleAtSpawn(coords)
+    for _, vehicle in ipairs(GetAllVehicles()) do
+        if DoesEntityExist(vehicle) and #(GetEntityCoords(vehicle) - vector3(coords.x, coords.y, coords.z)) < 3.0 then
+            return true
         end
     end
+    return false
+end
 
-    if math.random(1, 100) <= Config.TimedChanceGenerator then
-        job.timeLevel = math.random(2, 4) -- Randomly generate a timed job for a random skill level
+local function spawnVehicle(source, model, vehicleType, coords, plate)
+    if vehicleAtSpawn(coords) then return nil, 'That bay is no longer available.' end
+
+    local entity = CreateVehicleServerSetter(joaat(model), vehicleType, coords.x, coords.y, coords.z, coords.w)
+    local attempts = 0
+    while entity and entity ~= 0 and not DoesEntityExist(entity) and attempts < 100 do
+        Wait(0)
+        attempts = attempts + 1
     end
+    if not entity or entity == 0 or not DoesEntityExist(entity) then return nil, 'Vehicle creation failed.' end
 
-    jobs[QBCore.Shared.RandomStr(3)..QBCore.Shared.RandomInt(3)] = job
+    SetEntityRoutingBucket(entity, GetPlayerRoutingBucket(source))
+    if plate then SetVehicleNumberPlateText(entity, plate) end
+    local netId = NetworkGetNetworkIdFromEntity(entity)
+    attempts = 0
+    while (not netId or netId == 0) and attempts < 100 do
+        Wait(0)
+        attempts = attempts + 1
+        netId = NetworkGetNetworkIdFromEntity(entity)
+    end
+    if not netId or netId == 0 then
+        DeleteEntity(entity)
+        return nil, 'Vehicle network registration failed.'
+    end
+    return entity, netId
+end
+
+truckDefinition = function(spawnName)
+    if type(spawnName) ~= 'string' then return nil end
+    for _, truck in ipairs(Config.Trucks) do
+        if truck.name == spawnName then return truck end
+    end
+end
+
+local function headingDifference(left, right)
+    return math.abs((left - right + 180.0) % 360.0 - 180.0)
 end
 
 CreateThread(function()
-    for i = 1, 50 do -- Initialise jobs
-        generateJob()
-    end
-
+    for _ = 1, Config.MaxJobs do generateJob() end
     while true do
-        if #jobs <= Config.MaxJobs then generateJob() end
-        Wait(Config.JobGenerationTimer * 1000 * 60)
+        Wait(Config.JobGenerationTimer * 60000)
+        if jobCount < Config.MaxJobs then generateJob() end
     end
 end)
 
-QBCore.Functions.CreateCallback('qb-truckerjob:server:getJobs', function(source, cb)
-    return cb(jobs)
-end)
+QB.callback.register('qbtruckerjob:server:dashboardRequested', function(source)
+    if not exports.qbcore:getPlayer(source) then return nil, 'Your character is not available.' end
+    local _, trucker = normaliseTruckerRep(source)
+    local availableJobs, activeJobId = jobsForClient(source)
+    return { jobs = availableJobs, activeJobId = activeJobId, rep = trucker }
+end, { rateLimit = { max = 5, window = 5000 } })
 
-QBCore.Functions.CreateCallback('qb-truckerjob:server:acceptJob', function(source, cb, jobId)
-    local Player = QBCore.Functions.GetPlayer(source)
-    local rep = GetRep(source)
-    local truckerRep = rep.trucker
+QB.callback.register('qbtruckerjob:server:jobAccepted', function(source, jobId)
+    if type(jobId) ~= 'string' then return false, 'Invalid job.' end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
 
     local job = jobs[jobId]
+    if not job then return false, 'This job is no longer available.' end
+    if job.active then return false, 'This job has already been taken.' end
+    if activeJobFor(source) then return false, 'You already have an active job.' end
 
-    if not job then return TriggerClientEvent('QBCore:Notify', source, 'This job is not available', 'error') end
-
-    if job.distanceLevel > truckerRep.skills.distance then return TriggerClientEvent('QBCore:Notify', source, 'This job is too far', 'error') end 
-
-    if job.cargoLevel and job.cargoLevel > truckerRep.skills.cargo then return TriggerClientEvent('QBCore:Notify', source, 'This job has fragile and important cargo', 'error') end
-
-    if job.timeLevel and job.timeLevel > truckerRep.skills.time then return TriggerClientEvent('QBCore:Notify', source, 'This job requires a quick delivery skill', 'error') end
-
-    if job.active then return TriggerClientEvent('QBCore:Notify', source, 'This job is already active', 'error') end
-
-    for k, v in pairs(jobs) do
-        if v.active == source then
-            return TriggerClientEvent('QBCore:Notify', source, 'You already have an active job', 'error')
-        end
-    end
+    local _, trucker = normaliseTruckerRep(source)
+    if job.distanceLevel > trucker.skills.distance then return false, 'Increase your distance skill to take this job.' end
+    if job.cargoLevel > trucker.skills.cargo then return false, 'Increase your cargo skill to handle this load.' end
+    if job.timeLevel and job.timeLevel > trucker.skills.time then return false, 'Increase your time skill to take this expedited job.' end
 
     job.active = source
-    job.time = GetGameTimer() + (300000 + (math.floor(job.distance) / 1000 * 60000)) -- add 5 minutes + 1 minute per km
+    local duration = 300 + math.floor(job.distance / 1000) * 60
+    if job.timeLevel then duration = duration - 45 * job.timeLevel end
+    job.deadline = os.time() + math.max(60, duration)
+    spawnedVehicles[source] = spawnedVehicles[source] or {}
+    spawnedVehicles[source].jobId = jobId
+    return true, clientJob(jobId, job)
+end, { rateLimit = { max = 3, window = 5000 } })
 
-    if job.timeLevel then
-        job.time -= 45000 * job.timeLevel -- remove 45 seconds per timed delivery skill level
-    end
+QB.callback.register('qbtruckerjob:server:vehicleRequested', function(source, kind, jobId, spawnId)
+    if kind ~= 'truck' and kind ~= 'trailer' then return nil, 'Invalid vehicle type.' end
+    if type(jobId) ~= 'string' or not isInteger(spawnId) then return nil, 'Invalid vehicle request.' end
 
-    cb(jobs[jobId].active, jobs[jobId])
-end)
-
-QBCore.Functions.CreateCallback('qb-truckerjob:server:createVehicle', function(source, cb, spawnType, jobId, spawnId)
-    local truckerRep = GetRep(source).trucker
-    local vehicle = spawnType == 'truck' and truckerRep.activeTruck or jobs[jobId].cargo.trailer
-    local vehType = QBCore.Shared.Vehicles[vehicle] and QBCore.Shared.Vehicles[vehicle].type or 'automobile'
-    local veh = CreateVehicleServerSetter(joaat(vehicle), vehType, spawnType == 'truck' and Config.Coords.TruckSpawns[spawnId] or Config.Coords.TrailerSpawns[spawnId])
-    local netId = NetworkGetNetworkIdFromEntity(veh)
-    cb(netId)
-end)
-
-QBCore.Functions.CreateCallback('qb-truckerjob:server:completeJob', function(source, cb, jobId, success, trailer)
-    local Player = QBCore.Functions.GetPlayer(source)
     local job = jobs[jobId]
+    if not job or job.active ~= source then return nil, 'This is not your active job.' end
+    local state = spawnedVehicles[source] or { jobId = jobId }
+    spawnedVehicles[source] = state
 
-    if job.active ~= source then
-        TriggerClientEvent('QBCore:Notify', source, 'This job is not active', 'error')
+    if kind == 'truck' then
+        if not playerIsNear(source, Config.Coords.JobStation, 20.0) then return nil, 'You are too far from the depot.' end
+        local coords = Config.Coords.TruckSpawns[spawnId]
+        if not coords then return nil, 'Invalid truck bay.' end
+        if state.truck and DoesEntityExist(state.truck) then return nil, 'You already have a truck in use.' end
 
-        return cb(false)
+        local _, trucker = normaliseTruckerRep(source)
+        local truck = truckDefinition(trucker.activeTruck)
+        if not truck or not trucker.trucks[truck.name] then return nil, 'Your selected truck is unavailable.' end
+        local plate = ('TRK%s'):format(jobId):sub(1, 8)
+        local entity, netId = spawnVehicle(source, truck.name, 'automobile', coords, plate)
+        if not entity then return nil, netId end
+        if exports.qbvehiclekeys:giveKeys(source, plate) ~= true then
+            DeleteEntity(entity)
+            return nil, 'Vehicle keys could not be issued.'
+        end
+        state.truck = entity
+        return netId
     end
 
-    if not success then
-        TriggerClientEvent('QBCore:Notify', source, 'You have failed the job. Take your truck back to the depot.', 'error')
-        job.active = false
+    if not playerIsNear(source, Config.Coords.TrailerLocator, 12.0) then return nil, 'You are too far from the trailer office.' end
+    local coords = Config.Coords.TrailerSpawns[spawnId]
+    if not coords then return nil, 'Invalid trailer bay.' end
+    if state.trailer and DoesEntityExist(state.trailer) then return nil, 'Your trailer has already been dispatched.' end
+    local entity, netId = spawnVehicle(source, job.cargo.trailer, 'trailer', coords)
+    if not entity then return nil, netId end
+    state.trailer = entity
+    return netId
+end, { rateLimit = { max = 4, window = 10000 } })
+
+QB.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId, successful, trailerNetId)
+    if type(jobId) ~= 'string' or type(successful) ~= 'boolean' then return false, 'Invalid completion request.' end
+    local job = jobs[jobId]
+    if not job or job.active ~= source then return false, 'This job is not active.' end
+
+    local state = spawnedVehicles[source] or {}
+    if not successful then
+        deleteEntity(state.trailer)
+        state.trailer = nil
         jobs[jobId] = nil
-
-        return cb(false)
+        jobCount = jobCount - 1
+        return true, { failed = true }
     end
 
-    if not trailer then return cb(false) end
+    if not isInteger(trailerNetId) or trailerNetId <= 0 then return false, 'The assigned trailer could not be verified.' end
+    local trailer = NetworkGetEntityFromNetworkId(trailerNetId)
+    if not trailer or trailer == 0 or trailer ~= state.trailer or not DoesEntityExist(trailer) then
+        return false, 'The assigned trailer could not be verified.'
+    end
+    if not playerIsNear(source, job.coords, 25.0) then return false, 'You are too far from the delivery point.' end
+    if IsEntityAttached(trailer)
+        or #(GetEntityCoords(trailer) - vector3(job.coords.x, job.coords.y, job.coords.z)) > 5.0
+        or headingDifference(GetEntityHeading(trailer), job.coords.w) > 10.0 then
+        return false, 'Park the trailer fully inside the delivery marker.'
+    end
 
-    -- Check trailer to ensure it's in the dropoff zone
-    local trailer = NetworkGetEntityFromNetworkId(trailer)
-    if not CheckTrailer(vector3(job.coords.x, job.coords.y, job.coords.z), job.coords.w, trailer, source) then return cb(false) end
-
-    local late = false
-    local damaged = false
     local payout = math.floor(job.distance * Config.PayPerMeter)
+    local late = os.time() > job.deadline
+    local damaged = GetEntityHealth(trailer) / 10 <= Config.DamagePenaltyThreshold
+    if late then payout = payout - math.floor(payout / Config.LateDeliveryPenalty) end
+    if damaged then payout = payout - math.floor(payout / Config.DamagePenalty) end
 
-    if GetGameTimer() > job.time then
-        payout -= math.floor(payout / Config.LateDeliveryPenalty)
-        late = true
-        TriggerClientEvent('QBCore:Notify', source, 'You delivered the cargo late, some pay has been deducted', 'error') -- Locale
-    end
+    local paid, payError = exports.qbcore:addMoney(source, 'cash', payout, 'trucker-completed-job')
+    if not paid then return false, payError or 'Payment failed.' end
 
-    local damage = GetEntityHealth(trailer)
-    if damage / 10 <= Config.DamagePenaltyThreshold then
-        payout -= math.floor(payout / Config.DamagePenalty)
-        damaged = true
-        TriggerClientEvent('QBCore:Notify', source, 'You damaged your trailer, some pay has been deducted', 'error') -- Locale
-    end
-
-    -- Could compact those reasons into one notify
-
-    Player.Functions.AddMoney('cash', payout, 'trucker-completed-job')
-    TriggerClientEvent('QBCore:Notify', source, string.format('You have been paid $%s. Take your truck back to the depot', payout), 'success')
-
-    local rep = GetRep(source)
-    local truckerRep = rep.trucker
-
+    local rep, trucker = normaliseTruckerRep(source)
     local xpReward = Config.XPReward
+    if job.cargoLevel > 1 and not late and not damaged then xpReward = xpReward * Config.Multipliers.FragileXPMultiplier end
+    if job.timeLevel and not late and not damaged then xpReward = xpReward * Config.Multipliers.TimedXPMultiplier end
+    xpReward = math.floor(xpReward)
 
-    -- Checks if job is skilled, and if not damaged/late for XP reward
-    if job.cargoLevel > 1 and (not late and not damaged) then
-        xpReward = xpReward * Config.Multipliers.FragileXPMultiplier
+    local previousMilestone = math.floor(trucker.XP / 1000)
+    trucker.XP = trucker.XP + xpReward
+    local skillPointsGained = math.floor(trucker.XP / 1000) - previousMilestone
+    trucker.skillPoints = trucker.skillPoints + skillPointsGained
+    local saved, saveError = setTruckerRep(source, rep, trucker)
+    if not saved then
+        print(('^1[qbtruckerjob]^7 Paid player %d but could not save trucking XP: %s'):format(source, saveError or 'unknown error'))
     end
-
-    -- Checks if job is timed, and if not damaged/late for XP reward
-    if job.timeLevel and (not late and not damaged) then
-        xpReward = xpReward * Config.Multipliers.TimedXPMultiplier
-    end
-
-    -- If XP crosses thousandth add skill point
-    if xpReward >= 1000 - ((truckerRep.XP) % 1000) then
-        truckerRep.skillPoints += 1
-        TriggerClientEvent('QBCore:Notify', source, 'You gained a skill point', 'success')
-    end
-
-    truckerRep.XP += xpReward
-    Player.Functions.SetMetaData('rep', rep)
-
-    print(json.encode(QBCore.Functions.GetPlayer(source).PlayerData.metadata.rep, {indent = true}))
 
     jobs[jobId] = nil
-    cb(true)
-end)
+    jobCount = jobCount - 1
+    return true, {
+        payout = payout,
+        xp = xpReward,
+        late = late,
+        damaged = damaged,
+        skillPointsGained = skillPointsGained,
+    }
+end, { rateLimit = { max = 3, window = 10000 } })
 
-QBCore.Functions.CreateCallback('qb-truckerjob:server:upgradeSkill', function(source, cb, skill)
-    local Player = QBCore.Functions.GetPlayer(source)
-    local rep = GetRep(source)
-    local truckerRep = rep.trucker
+QB.callback.register('qbtruckerjob:server:skillUpgraded', function(source, skill)
+    if skill ~= 'distance' and skill ~= 'cargo' and skill ~= 'time' then return false, 'Invalid skill.' end
+    local rep, trucker = normaliseTruckerRep(source)
+    if trucker.skillPoints < 1 then return false, 'You do not have enough skill points.' end
+    if trucker.skills[skill] >= 4 then return false, 'That skill is already at its maximum level.' end
 
-    print(truckerRep.skillPoints)
+    trucker.skills[skill] = trucker.skills[skill] + 1
+    trucker.skillPoints = trucker.skillPoints - 1
+    local saved, saveError = setTruckerRep(source, rep, trucker)
+    if not saved then return false, saveError or 'The skill upgrade could not be saved.' end
+    return true, trucker
+end, { rateLimit = { max = 4, window = 5000 } })
 
-    if truckerRep.skillPoints < 1 then return cb(false) end
+QB.callback.register('qbtruckerjob:server:truckPurchased', function(source, spawnName)
+    local truck = truckDefinition(spawnName)
+    if not truck or truck.price <= 0 then return false, 'That truck is not for sale.' end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
 
-    if not truckerRep.skills[skill] or truckerRep.skills[skill] >= 4 then return cb(false) end
+    local rep, trucker = normaliseTruckerRep(source)
+    if trucker.trucks[truck.name] then return false, 'You already own this truck.' end
+    local paid, paymentError = exports.qbcore:removeMoney(source, 'bank', truck.price, 'trucker-purchase-truck')
+    if not paid then return false, paymentError or 'You do not have enough money in the bank.' end
 
-    truckerRep.skills[skill] += 1
-    truckerRep.skillPoints = truckerRep.skillPoints - 1
-
-    Player.Functions.SetMetaData('rep', rep)
-
-    cb(true)
-end)
-
-QBCore.Functions.CreateCallback('qb-truckerjob:server:purchaseTruck', function(source, cb, spawnName)
-    local truck = nil
-
-    -- Check truck exists, get price
-    for k, v in pairs(Config.Trucks) do
-        if v.name == spawnName then
-            truck = v
-            break
-        end
+    trucker.trucks[truck.name] = true
+    local saved, saveError = setTruckerRep(source, rep, trucker)
+    if not saved then
+        exports.qbcore:addMoney(source, 'bank', truck.price, 'trucker-purchase-refund')
+        return false, saveError or 'The truck purchase could not be saved.'
     end
+    return true, trucker
+end, { rateLimit = { max = 2, window = 5000 } })
 
-    if not truck then return cb(false) end
+QB.callback.register('qbtruckerjob:server:truckSelected', function(source, spawnName)
+    local truck = truckDefinition(spawnName)
+    if not truck then return false, 'That truck is unavailable.' end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
 
-    local Player = QBCore.Functions.GetPlayer(source)
-    local rep = GetRep(source)
+    local rep, trucker = normaliseTruckerRep(source)
+    if not trucker.trucks[truck.name] then return false, 'You do not own this truck.' end
+    trucker.activeTruck = truck.name
+    local saved, saveError = setTruckerRep(source, rep, trucker)
+    if not saved then return false, saveError or 'The truck selection could not be saved.' end
+    return true, trucker
+end, { rateLimit = { max = 3, window = 5000 } })
 
-    if rep.trucker.trucks[truck.name] then return cb(false) end
+QB.callback.register('qbtruckerjob:server:vehicleReturned', function(source, kind, netId)
+    if kind ~= 'truck' and kind ~= 'trailer' then return false end
+    if not isInteger(netId) or netId <= 0 then return false end
+    local state = spawnedVehicles[source]
+    local entity = state and state[kind]
+    if not entity or NetworkGetNetworkIdFromEntity(entity) ~= netId then return false end
+    deleteEntity(entity)
+    state[kind] = nil
+    return true
+end, { rateLimit = { max = 4, window = 5000 } })
 
-    if not Player.Functions.RemoveMoney('bank', truck.price, 'trucker-purchase-truck') then return cb(false) end
-
-    -- Should abstract rep out into shared function for standardised rep data (Done)
-    print(json.encode(rep, {indent = true}))
-    rep.trucker.trucks[truck.name] = true
-    print(json.encode(rep, {indent = true}))
-    
-    Player.Functions.SetMetaData('rep', rep)
-    TriggerClientEvent('QBCore:Notify', source, string.format('You purchased a truck for $%s', truck.price), 'success') -- Locale?
-    cb(true)
-end)
-
-QBCore.Functions.CreateCallback('qb-truckerjob:server:useTruck', function(source, cb, spawnName)
-    local truck = nil
-
-    -- Check truck is valid
-    for k, v in pairs(Config.Trucks) do
-        if v.name == spawnName then
-            truck = v
-            break
-        end
+AddEventHandler('playerDropped', function()
+    local source = source
+    local jobId = activeJobFor(source)
+    if jobId then
+        jobs[jobId] = nil
+        jobCount = jobCount - 1
     end
-
-    if not truck then return cb(false) end
-
-    local Player = QBCore.Functions.GetPlayer(source)
-    local rep = GetRep(source)
-    -- if not owned, if not free, if not default truck
-    if not rep.trucker.trucks[truck.name] and truck.price ~= 0 and truck.name ~= Config.DefaultTruck then return cb(false) end -- Check if owned
-
-    rep.trucker.activeTruck = truck.name
-
-    Player.Functions.SetMetaData('rep', rep)
-    cb(true)
+    local state = spawnedVehicles[source]
+    if state then
+        deleteEntity(state.truck)
+        deleteEntity(state.trailer)
+    end
+    spawnedVehicles[source] = nil
 end)

@@ -1,19 +1,33 @@
-# qb-truckerjob
+# qbtruckerjob
 
-This is a trucking resource for FiveM built for QBCore. It allows players to take on trucking jobs, delivering various types of cargo to different locations. The script includes features such as timed job generation, skill levels, and penalties for late or damaged deliveries.
+A server-authoritative freight job for the qbcore2 stack. Players accept generated contracts, collect a depot truck and assigned trailer, deliver cargo, earn XP, upgrade skills, and build a personal truck fleet.
 
 ## Features
 
 - Random job generation with different skill levels and cargo types.
 - Timed and fragile job types with XP multipliers.
 - Penalties for late deliveries and damaged cargo.
-- Truck return system.
+- Shared qblib AppShell for contracts, skills, and the truck fleet.
+- qblib notifications, text prompts, callbacks, and zones.
+- Modern qbcore metadata, money, and shared-vehicle APIs.
+- Server-owned job vehicles and server-verified delivery payouts.
+- Truck return system with qbvehiclekeys integration.
 - Configurable job settings.
 
 ## Installation
 
-1. Clone the repository or download the script files.
-2. Place the script in your `resources` folder.
+Start these resources first, in order:
+
+```cfg
+ensure qbtheme
+ensure qblib
+ensure qbcore
+ensure qbtarget
+ensure qbvehiclekeys
+ensure qbtruckerjob
+```
+
+The configured fuel resource is optional. When it is running, newly dispatched trucks receive a randomized starting fuel level.
 
 ## Configuration
 
@@ -22,7 +36,6 @@ The script can be configured through the `config.lua` file. Below are some of th
 - `FuelResource`: The fuel resource to use.
 - `JobGenerationTimer`: How often a job is generated in minutes.
 - `MaxJobs`: Maximum number of jobs that can be generated.
-- `FragileChanceGenerator`: Chance for a fragile job to be generated.
 - `TimedChanceGenerator`: Chance for a timed job to be generated.
 - `XPReward`: XP reward for completing a job.
 - `Multipliers`: XP multipliers for fragile and timed jobs.
@@ -32,7 +45,7 @@ The script can be configured through the `config.lua` file. Below are some of th
 - `DamagePenalty`: Penalty percentage for damaged cargo.
 - `DefaultTruck`: Default truck for players to use.
 - `Trucks`: List of available trucks and their prices.
-- `DeliveryTypes`: Different types of deliveries based on skill levels.
+- `DeliveryTypes`: Cargo and trailer choices grouped by required cargo-skill level.
 
 ## License
 ```
