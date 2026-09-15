@@ -9,7 +9,7 @@ dependencies {
     'qblib',
     'qbcore',
     'qbtarget',
-    'qbvehiclekeys',
+    --'qbvehiclekeys',
 }
 
 shared_script '@qblib/init.lua'

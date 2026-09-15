@@ -251,10 +251,10 @@ QB.callback.register('qbtruckerjob:server:vehicleRequested', function(source, ki
         local plate = ('TRK%s'):format(jobId):sub(1, 8)
         local entity, netId = spawnVehicle(source, truck.name, 'automobile', coords, plate)
         if not entity then return nil, netId end
-        if exports.qbvehiclekeys:giveKeys(source, plate) ~= true then
-            DeleteEntity(entity)
-            return nil, 'Vehicle keys could not be issued.'
-        end
+        --if exports.qbvehiclekeys:giveKeys(source, plate) ~= true then
+        --    DeleteEntity(entity)
+        --    return nil, 'Vehicle keys could not be issued.'
+        --end
         state.truck = entity
         return netId
     end
@@ -289,7 +289,7 @@ QB.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId,
         return false, 'The assigned trailer could not be verified.'
     end
     if not playerIsNear(source, job.coords, 25.0) then return false, 'You are too far from the delivery point.' end
-    if IsEntityAttached(trailer)
+    if GetEntityAttachedTo(trailer) ~= 0
         or #(GetEntityCoords(trailer) - vector3(job.coords.x, job.coords.y, job.coords.z)) > 5.0
         or headingDifference(GetEntityHeading(trailer), job.coords.w) > 10.0 then
         return false, 'Park the trailer fully inside the delivery marker.'
