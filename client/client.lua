@@ -11,6 +11,7 @@ local isInDropoffZone = false
 local returningTruck = false
 local routeBlip
 local trailerBlip
+local truckReturnBlip
 local returnPrompt
 local appDefinition
 local jobStationTarget
@@ -54,6 +55,8 @@ end
 local function clearTruckReturn()
     clearPrompt()
     returningTruck = false
+    removeBlip(truckReturnBlip)
+    truckReturnBlip = nil
     if truckReturnZone then truckReturnZone.remove(); truckReturnZone = nil end
 end
 
@@ -93,6 +96,16 @@ end
 
 local function startTruckReturn()
     if truckReturnZone or not currentTruck then return end
+
+    truckReturnBlip = AddBlipForCoord(Config.Coords.TruckReturn.x, Config.Coords.TruckReturn.y, Config.Coords.TruckReturn.z)
+    SetBlipSprite(truckReturnBlip, 477)
+    SetBlipColour(truckReturnBlip, 2)
+    SetBlipScale(truckReturnBlip, 0.8)
+    SetBlipAsShortRange(truckReturnBlip, false)
+    BeginTextCommandSetBlipName('STRING')
+    AddTextComponentSubstringPlayerName('Truck Return')
+    EndTextCommandSetBlipName(truckReturnBlip)
+
     truckReturnZone = QB.zones.sphere({
         coords = Config.Coords.TruckReturn,
         radius = 10.0,
@@ -110,10 +123,7 @@ local function startTruckReturn()
                         local returned = QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
                         if returned then
                             currentTruck = nil
-                            clearPrompt()
-                            truckReturnZone.remove()
-                            truckReturnZone = nil
-                            returningTruck = false
+                            clearTruckReturn()
                             notify('Truck returned to the depot.', 'success')
                         end
                         return
@@ -541,6 +551,7 @@ AddEventHandler('onResourceStop', function(resource)
     if resource ~= GetCurrentResourceName() then return end
     removeBlip(routeBlip)
     removeBlip(trailerBlip)
+    removeBlip(truckReturnBlip)
 end)
 
 exports('openDispatch', openDispatch)
