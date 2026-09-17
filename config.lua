@@ -343,3 +343,6 @@ Config.Coords = {
         vector4(955.85, -22.89, 78.77, 147.51),
     },
 }
+
+-- Registers this resource-owned configuration with qblib.
+if QB and QB.config and QB.config.adopt then Config = QB.config.adopt(Config) end
