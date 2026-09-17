@@ -70,6 +70,7 @@ function SetVehicleNumberPlateText() end
 function NetworkGetNetworkIdFromEntity(entity) return entity + 1000 end
 function NetworkGetEntityFromNetworkId(netId) return netId - 1000 end
 function IsEntityAttached() return false end
+function GetEntityAttachedTo() return 0 end
 function DeleteEntity(entity) entities[entity] = nil end
 function AddEventHandler() end
 
