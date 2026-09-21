@@ -528,6 +528,23 @@ end
 
 registerJobStationTarget()
 
+CreateThread(function()
+    QB.blips.create(Config.Coords.JobStation, {
+        sprite = 477,
+        color = 2,
+        scale = 0.8,
+        shortRange = true,
+        category = 'Trucking',
+        name = 'Freight Depot',
+        info = {
+            title = 'Freight Depot',
+            rows = {
+                { kind = 'wrappedText', value = 'Haul cargo contracts for pay. Open to anyone, no employment required.' },
+            },
+        },
+    })
+end)
+
 AddEventHandler('onClientResourceStart', function(resource)
     if resource == 'qbtarget' then registerJobStationTarget() end
 end)
