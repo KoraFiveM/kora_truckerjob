@@ -163,10 +163,6 @@ local function finishJob(successful)
         if result.damaged then details[#details + 1] = 'A cargo-damage penalty was applied.' end
         if result.skillPointsGained > 0 then details[#details + 1] = 'You gained a skill point.' end
         notify(table.concat(details, '\n'), 'success')
-        if dropOffZone then
-            -- Keep the delivered trailer visible until the driver leaves the yard.
-            return true
-        end
     else
         releaseTrailer()
         clearDropoffZone()
