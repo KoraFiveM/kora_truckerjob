@@ -400,3 +400,11 @@ AddEventHandler('playerDropped', function()
     end
     spawnedVehicles[source] = nil
 end)
+
+AddEventHandler('onResourceStop', function(resource)
+    if resource ~= GetCurrentResourceName() then return end
+    for _, state in pairs(spawnedVehicles) do
+        deleteEntity(state.truck)
+        deleteEntity(state.trailer)
+    end
+end)

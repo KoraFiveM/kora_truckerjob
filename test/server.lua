@@ -18,6 +18,8 @@ function vector4(x, y, z, w)
     return setmetatable({ x = x, y = y, z = z, w = w }, vectorMeta)
 end
 
+local handlers = {}
+local deleted = {}
 local callbacks = {}
 local threads = {}
 local metadata = { rep = { trucker = {
@@ -71,8 +73,9 @@ function NetworkGetNetworkIdFromEntity(entity) return entity + 1000 end
 function NetworkGetEntityFromNetworkId(netId) return netId - 1000 end
 function IsEntityAttached() return false end
 function GetEntityAttachedTo() return 0 end
-function DeleteEntity(entity) entities[entity] = nil end
-function AddEventHandler() end
+function DeleteEntity(entity) deleted[#deleted + 1] = entity; entities[entity] = nil end
+function AddEventHandler(name, handler) handlers[name] = handler end
+function GetCurrentResourceName() return 'qbtruckerjob' end
 
 assert(loadfile(resourceRoot .. '/config.lua'))()
 playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
@@ -101,5 +104,33 @@ playerCoords = entities[trailer].coords
 local completed, result = callbacks['qbtruckerjob:server:jobCompleted'](1, job.id, true, trailerNetId)
 assert(completed and result.payout > 0 and paid.amount == result.payout, 'verified delivery should pay through qbcore')
 assert(metadata.rep.trucker.XP > 0, 'verified delivery should persist trucking XP')
+
+-- Resource stop deletes every tracked truck/trailer, including completed jobs.
+playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
+local secondJob = dashboard.jobs[2]
+assert(callbacks['qbtruckerjob:server:jobAccepted'](2, secondJob.id))
+local secondTruckNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](2, 'truck', secondJob.id, 2))
+playerCoords = vector3(Config.Coords.TrailerLocator.x, Config.Coords.TrailerLocator.y, Config.Coords.TrailerLocator.z)
+local secondTrailerNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](2, 'trailer', secondJob.id, 2))
+assert(callbacks['qbtruckerjob:server:vehicleReturned'](2, 'truck', secondTruckNetId))
+assert(not DoesEntityExist(NetworkGetEntityFromNetworkId(secondTruckNetId)), 'normal return should delete its assigned vehicle')
+playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
+assert(callbacks['qbtruckerjob:server:jobAccepted'](3, dashboard.jobs[3].id)) -- No vehicles requested yet.
+local foreignVehicle = 9000
+entities[foreignVehicle] = { coords = vector3(10000, 10000, 10000), heading = 0, health = 1000 }
+local stop = assert(handlers.onResourceStop, 'server must register resource-stop vehicle cleanup')
+local deletionsBeforeStop = #deleted
+stop('another-resource')
+assert(#deleted == deletionsBeforeStop, 'stopping another resource must not delete any trucking vehicles')
+assert(DoesEntityExist(NetworkGetEntityFromNetworkId(truckNetId)) and DoesEntityExist(trailer), 'completed job vehicles remain tracked until return or stop')
+assert(DoesEntityExist(NetworkGetEntityFromNetworkId(secondTrailerNetId)), 'second player trailer should still exist before stop')
+stop(GetCurrentResourceName())
+assert(not DoesEntityExist(NetworkGetEntityFromNetworkId(truckNetId)), 'stop must delete the completed job truck')
+assert(not DoesEntityExist(trailer), 'stop must delete the completed job trailer')
+assert(not DoesEntityExist(NetworkGetEntityFromNetworkId(secondTrailerNetId)), 'stop must clean every player vehicle record')
+assert(DoesEntityExist(foreignVehicle), 'stop must preserve vehicles this resource did not create')
+assert(#deleted == deletionsBeforeStop + 3, 'stop must delete only the three remaining tracked vehicles')
+stop(GetCurrentResourceName())
+assert(#deleted == deletionsBeforeStop + 3, 'existing missing-entity guard prevents duplicate deletion')
 
 print('qbtruckerjob server smoke tests passed')
