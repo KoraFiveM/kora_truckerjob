@@ -44,7 +44,7 @@ local function clearPrompt()
 end
 
 local function clearTrailerTarget()
-    if trailerTarget then exports.qbtarget:removeZone(trailerTarget); trailerTarget = nil end
+    if trailerTarget then exports.kora_target:removeZone(trailerTarget); trailerTarget = nil end
 end
 
 local function clearDropoffZone()
@@ -242,7 +242,7 @@ end
 local function createTrailerTarget()
     clearTrailerTarget()
     setRoute(Config.Coords.TrailerLocator)
-    trailerTarget = exports.qbtarget:addSphereZone({
+    trailerTarget = exports.kora_target:addSphereZone({
         coords = Config.Coords.TrailerLocator,
         radius = 0.75,
         distance = 2.5,
@@ -320,7 +320,7 @@ local function jobItems()
             id = job.id,
             label = job.cargo.label,
             description = ('Contract %s · %s'):format(job.id, distanceLabel(job.distance)),
-            image = ('nui://qbtruckerjob/html/images/cargo/%s'):format(job.image),
+            image = ('nui://kora_truckerjob/html/images/cargo/%s'):format(job.image),
             badge = job.active and (job.id == dashboard.activeJobId and 'Your active job' or 'Taken')
                 or eligible and 'Available' or 'Locked',
             tone = job.active and 'neutral' or eligible and 'success' or 'warning',
@@ -372,7 +372,7 @@ local function truckItems()
             id = truck.name,
             label = label,
             description = truck.price == 0 and 'Depot starter truck' or ('Purchase price: %s'):format(money(truck.price)),
-            image = ('nui://qbtruckerjob/html/images/trucks/%s.webp'):format(truck.name),
+            image = ('nui://kora_truckerjob/html/images/trucks/%s.webp'):format(truck.name),
             badge = selected and 'Selected' or owned and 'Owned' or 'For sale',
             tone = selected and 'success' or owned and 'primary' or 'neutral',
             metadata = {
@@ -506,8 +506,8 @@ local function openDispatch()
 end
 
 local function registerJobStationTarget()
-    if jobStationTarget then exports.qbtarget:removeZone(jobStationTarget) end
-    jobStationTarget = exports.qbtarget:addSphereZone({
+    if jobStationTarget then exports.kora_target:removeZone(jobStationTarget) end
+    jobStationTarget = exports.kora_target:addSphereZone({
         coords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z),
         radius = 0.75,
         distance = 2.5,
@@ -542,7 +542,7 @@ CreateThread(function()
 end)
 
 AddEventHandler('onClientResourceStart', function(resource)
-    if resource == 'qbtarget' then registerJobStationTarget() end
+    if resource == 'kora_target' then registerJobStationTarget() end
 end)
 
 AddEventHandler('gameEventTriggered', function(name, args)

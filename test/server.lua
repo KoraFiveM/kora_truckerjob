@@ -36,7 +36,7 @@ QB = { callback = {} }
 function QB.callback.register(name, handler) callbacks[name] = handler end
 
 exports = {
-    qbcore = {
+    kora_core = {
         getPlayer = function(_, source) return source == 1 and { source = source } or nil end,
         getMetaData = function(_, _, key) return metadata[key] end,
         setMetaData = function(_, _, key, value) metadata[key] = value; return true end,
@@ -45,7 +45,7 @@ exports = {
         addMoney = function(_, _, account, amount) paid = { account = account, amount = amount }; return true end,
         removeMoney = function() return true end,
     },
-    qbvehiclekeys = { giveKeys = function() return true end },
+    kora_vehiclekeys = { giveKeys = function() return true end },
 }
 
 function CreateThread(handler) threads[#threads + 1] = coroutine.create(handler) end
@@ -75,7 +75,7 @@ function IsEntityAttached() return false end
 function GetEntityAttachedTo() return 0 end
 function DeleteEntity(entity) deleted[#deleted + 1] = entity; entities[entity] = nil end
 function AddEventHandler(name, handler) handlers[name] = handler end
-function GetCurrentResourceName() return 'qbtruckerjob' end
+function GetCurrentResourceName() return 'kora_truckerjob' end
 
 assert(loadfile(resourceRoot .. '/config.lua'))()
 playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)

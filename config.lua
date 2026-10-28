@@ -344,5 +344,5 @@ Config.Coords = {
     },
 }
 
--- Registers this resource-owned configuration with qblib.
+-- Registers this resource-owned configuration with kora_lib.
 if QB and QB.config and QB.config.adopt then Config = QB.config.adopt(Config) end

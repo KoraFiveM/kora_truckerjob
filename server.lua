@@ -20,7 +20,7 @@ local function playerIsNear(source, coords, maximumDistance)
 end
 
 local function normaliseTruckerRep(source)
-    local rep = exports.qbcore:getMetaData(source, 'rep') or {}
+    local rep = exports.kora_core:getMetaData(source, 'rep') or {}
     local trucker = type(rep.trucker) == 'table' and rep.trucker or {}
     local skills = type(trucker.skills) == 'table' and trucker.skills or {}
     local changed = rep.trucker ~= trucker or trucker.skills ~= skills
@@ -64,13 +64,13 @@ local function normaliseTruckerRep(source)
     end
     rep.trucker = trucker
 
-    if changed then exports.qbcore:setMetaData(source, 'rep', rep) end
+    if changed then exports.kora_core:setMetaData(source, 'rep', rep) end
     return rep, trucker
 end
 
 local function setTruckerRep(source, rep, trucker)
     rep.trucker = trucker
-    return exports.qbcore:setMetaData(source, 'rep', rep)
+    return exports.kora_core:setMetaData(source, 'rep', rep)
 end
 
 local function clientJob(id, job)
@@ -122,7 +122,7 @@ local function generateJob()
     local id
 
     repeat
-        id = exports.qbcore:randomStr(3) .. exports.qbcore:randomInt(3)
+        id = exports.kora_core:randomStr(3) .. exports.kora_core:randomInt(3)
     until not jobs[id]
 
     jobs[id] = {
@@ -201,7 +201,7 @@ CreateThread(function()
 end)
 
 QB.callback.register('qbtruckerjob:server:dashboardRequested', function(source)
-    if not exports.qbcore:getPlayer(source) then return nil, 'Your character is not available.' end
+    if not exports.kora_core:getPlayer(source) then return nil, 'Your character is not available.' end
     local _, trucker = normaliseTruckerRep(source)
     local availableJobs, activeJobId = jobsForClient(source)
     return { jobs = availableJobs, activeJobId = activeJobId, rep = trucker }
@@ -251,7 +251,7 @@ QB.callback.register('qbtruckerjob:server:vehicleRequested', function(source, ki
         local plate = ('TRK%s'):format(jobId):sub(1, 8)
         local entity, netId = spawnVehicle(source, truck.name, 'automobile', coords, plate)
         if not entity then return nil, netId end
-        --if exports.qbvehiclekeys:giveKeys(source, plate) ~= true then
+        --if exports.kora_vehiclekeys:giveKeys(source, plate) ~= true then
         --    DeleteEntity(entity)
         --    return nil, 'Vehicle keys could not be issued.'
         --end
@@ -301,7 +301,7 @@ QB.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId,
     if late then payout = payout - math.floor(payout / Config.LateDeliveryPenalty) end
     if damaged then payout = payout - math.floor(payout / Config.DamagePenalty) end
 
-    local paid, payError = exports.qbcore:addMoney(source, 'cash', payout, 'trucker-completed-job')
+    local paid, payError = exports.kora_core:addMoney(source, 'cash', payout, 'trucker-completed-job')
     if not paid then return false, payError or 'Payment failed.' end
 
     local rep, trucker = normaliseTruckerRep(source)
@@ -350,13 +350,13 @@ QB.callback.register('qbtruckerjob:server:truckPurchased', function(source, spaw
 
     local rep, trucker = normaliseTruckerRep(source)
     if trucker.trucks[truck.name] then return false, 'You already own this truck.' end
-    local paid, paymentError = exports.qbcore:removeMoney(source, 'bank', truck.price, 'trucker-purchase-truck')
+    local paid, paymentError = exports.kora_core:removeMoney(source, 'bank', truck.price, 'trucker-purchase-truck')
     if not paid then return false, paymentError or 'You do not have enough money in the bank.' end
 
     trucker.trucks[truck.name] = true
     local saved, saveError = setTruckerRep(source, rep, trucker)
     if not saved then
-        exports.qbcore:addMoney(source, 'bank', truck.price, 'trucker-purchase-refund')
+        exports.kora_core:addMoney(source, 'bank', truck.price, 'trucker-purchase-refund')
         return false, saveError or 'The truck purchase could not be saved.'
     end
     return true, trucker
