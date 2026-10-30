@@ -4,6 +4,15 @@ Config = {
 
     JobGenerationTimer = 2, -- How often a job is generated in minutes
     MaxJobs = 50,
+    MinStarterJobs = 3, -- Jobs kept available to a trucker with every skill still at level 1
+
+    GuaranteeQualifiedJob = true, -- Dispatch always lists a contract the player's skills qualify for (adds a tier 1 job if needed)
+
+    ContractCooldown = 0, -- Seconds a player must wait after completing a contract before accepting another (0 = off)
+    CooldownOnAbandon = false, -- Also start the cooldown when a contract is abandoned or fails (no payout is earned)
+
+    GiveKeys = true, -- Give the player keys to the dispatched truck (trailers have no ignition, so get none)
+    KeysResource = 'kora_vehiclekeys', -- Resource exporting giveKeys/removeKeys
 
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 

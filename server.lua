@@ -1,6 +1,7 @@
 local jobs = {}
 local jobCount = 0
 local spawnedVehicles = {}
+local cooldowns = {} -- [citizenid or source] = os.time() the player may accept the next contract
 
 local skillDistances = { 1500, 3000, 5000, 7000 }
 local truckDefinition
@@ -113,12 +114,93 @@ local function jobDistanceLevel(distance)
     return #skillDistances
 end
 
-local function generateJob()
-    local deliveryCoords = Config.Coords.Deliveries[math.random(1, #Config.Coords.Deliveries)]
-    local cargoLevel = math.random(1, #Config.DeliveryTypes)
+local function deliveryDistance(coords)
+    local station = Config.Coords.JobStation
+    return math.floor(#(vector3(coords.x, coords.y, coords.z) - vector3(station.x, station.y, station.z)))
+end
+
+local deliveriesByLevel
+
+local function deliveryPool(level)
+    if not deliveriesByLevel then
+        deliveriesByLevel = {}
+        for _, coords in ipairs(Config.Coords.Deliveries) do
+            local bucket = jobDistanceLevel(deliveryDistance(coords))
+            deliveriesByLevel[bucket] = deliveriesByLevel[bucket] or {}
+            local list = deliveriesByLevel[bucket]
+            list[#list + 1] = coords
+        end
+    end
+
+    local pool = deliveriesByLevel[level]
+    if not pool or #pool == 0 then return Config.Coords.Deliveries end
+    return pool
+end
+
+---@param job table
+---@return boolean -- takeable by a trucker with every skill still at level 1
+local function isStarterJob(job)
+    return job.distanceLevel == 1 and job.cargoLevel == 1 and not job.timeLevel
+end
+
+local function starterJobCount()
+    local count = 0
+    for _, job in pairs(jobs) do
+        if not job.active and isStarterJob(job) then count = count + 1 end
+    end
+    return count
+end
+
+---Pure: can a trucker with these skill levels take this job?
+---@param job table
+---@param skills table
+---@return boolean
+local function jobQualifies(job, skills)
+    if job.distanceLevel > skills.distance then return false end
+    if job.cargoLevel > skills.cargo then return false end
+    if job.timeLevel and job.timeLevel > skills.time then return false end
+    return true
+end
+
+local function hasQualifyingJob(skills)
+    for _, job in pairs(jobs) do
+        if not job.active and jobQualifies(job, skills) then return true end
+    end
+    return false
+end
+
+---Pure: seconds left of a cooldown, 0 when it is over or never started.
+---@param expiresAt? integer
+---@param now integer
+---@return integer
+local function cooldownRemaining(expiresAt, now)
+    if not expiresAt or expiresAt <= now then return 0 end
+    return expiresAt - now
+end
+
+local function formatDuration(seconds)
+    if seconds >= 60 then return ('%dm %02ds'):format(seconds // 60, seconds % 60) end
+    return ('%ds'):format(seconds)
+end
+
+local function cooldownKey(source)
+    local citizenid = exports.kora_core:getPlayerData(source, { 'citizenid' })
+    return citizenid or source
+end
+
+local function startCooldown(source)
+    local seconds = tonumber(Config.ContractCooldown) or 0
+    if seconds > 0 then cooldowns[cooldownKey(source)] = os.time() + seconds end
+end
+
+---@param starter? boolean -- force a job every trucker can take
+local function generateJob(starter)
+    local pool = starter and deliveryPool(1) or Config.Coords.Deliveries
+    local deliveryCoords = pool[math.random(1, #pool)]
+    local cargoLevel = starter and 1 or math.random(1, #Config.DeliveryTypes)
     local cargoOptions = Config.DeliveryTypes[cargoLevel]
     local cargo = cargoOptions[math.random(1, #cargoOptions)]
-    local distance = math.floor(#(deliveryCoords - Config.Coords.JobStation))
+    local distance = deliveryDistance(deliveryCoords)
     local id
 
     repeat
@@ -135,14 +217,58 @@ local function generateJob()
         },
         image = cargo.image,
         cargoLevel = cargoLevel,
-        timeLevel = math.random(1, 100) <= Config.TimedChanceGenerator and math.random(2, 4) or nil,
+        timeLevel = not starter and math.random(1, 100) <= Config.TimedChanceGenerator
+            and math.random(2, 4) or nil,
+        created = os.time(),
         active = false,
     }
     jobCount = jobCount + 1
 end
 
+local function evictOldestJob()
+    local oldestId, oldest, oldestOtherId, oldestOther
+    for id, job in pairs(jobs) do
+        if not job.active then
+            if not oldest or job.created < oldest.created then oldestId, oldest = id, job end
+            if not isStarterJob(job) and (not oldestOther or job.created < oldestOther.created) then
+                oldestOtherId, oldestOther = id, job
+            end
+        end
+    end
+
+    local id = oldestOtherId or oldestId
+    if not id then return false end
+    jobs[id] = nil
+    jobCount = jobCount - 1
+    return true
+end
+
+---Makes sure a trucker's skills can take at least one open contract (tier 1 jobs need no skills).
+---@param skills table
+local function ensureQualifyingJob(skills)
+    if Config.GuaranteeQualifiedJob == false or hasQualifyingJob(skills) then return end
+    if jobCount >= Config.MaxJobs and not evictOldestJob() then return end
+    generateJob(true)
+end
+
 local function deleteEntity(entity)
     if entity and entity ~= 0 and DoesEntityExist(entity) then DeleteEntity(entity) end
+end
+
+local function keysResource()
+    return Config.KeysResource or 'kora_vehiclekeys'
+end
+
+local function giveTruckKeys(source, plate)
+    if Config.GiveKeys == false then return true end
+    local ok, given = pcall(function() return exports[keysResource()]:giveKeys(source, plate, true) end)
+    return ok and given == true
+end
+
+local function removeTruckKeys(source, state)
+    if Config.GiveKeys == false or not state.plate then return end
+    pcall(function() exports[keysResource()]:removeKeys(source, state.plate) end)
+    state.plate = nil
 end
 
 local function vehicleAtSpawn(coords)
@@ -193,16 +319,21 @@ local function headingDifference(left, right)
 end
 
 CreateThread(function()
-    for _ = 1, Config.MaxJobs do generateJob() end
+    local starters = math.min(Config.MinStarterJobs, Config.MaxJobs)
+    for _ = 1, starters do generateJob(true) end
+    for _ = 1, Config.MaxJobs - starters do generateJob() end
+
     while true do
         Wait(Config.JobGenerationTimer * 60000)
-        if jobCount < Config.MaxJobs then generateJob() end
+        local starter = starterJobCount() < Config.MinStarterJobs
+        if jobCount < Config.MaxJobs or evictOldestJob() then generateJob(starter) end
     end
 end)
 
 QB.callback.register('qbtruckerjob:server:dashboardRequested', function(source)
     if not exports.kora_core:getPlayer(source) then return nil, 'Your character is not available.' end
     local _, trucker = normaliseTruckerRep(source)
+    ensureQualifyingJob(trucker.skills)
     local availableJobs, activeJobId = jobsForClient(source)
     return { jobs = availableJobs, activeJobId = activeJobId, rep = trucker }
 end, { rateLimit = { max = 5, window = 5000 } })
@@ -215,6 +346,13 @@ QB.callback.register('qbtruckerjob:server:jobAccepted', function(source, jobId)
     if not job then return false, 'This job is no longer available.' end
     if job.active then return false, 'This job has already been taken.' end
     if activeJobFor(source) then return false, 'You already have an active job.' end
+
+    local remaining = cooldownRemaining(cooldowns[cooldownKey(source)], os.time())
+    if remaining > 0 then
+        local message = ('Your next contract is available in %s.'):format(formatDuration(remaining))
+        QB.notify.send(source, { title = 'Trucking', message = message, type = 'error' })
+        return false, message
+    end
 
     local _, trucker = normaliseTruckerRep(source)
     if job.distanceLevel > trucker.skills.distance then return false, 'Increase your distance skill to take this job.' end
@@ -251,11 +389,13 @@ QB.callback.register('qbtruckerjob:server:vehicleRequested', function(source, ki
         local plate = ('TRK%s'):format(jobId):sub(1, 8)
         local entity, netId = spawnVehicle(source, truck.name, 'automobile', coords, plate)
         if not entity then return nil, netId end
-        --if exports.kora_vehiclekeys:giveKeys(source, plate) ~= true then
-        --    DeleteEntity(entity)
-        --    return nil, 'Vehicle keys could not be issued.'
-        --end
+        -- Server-side spawn: the plate set by spawnVehicle is final, so keys are issued for it here.
+        if not giveTruckKeys(source, plate) then
+            DeleteEntity(entity)
+            return nil, 'Vehicle keys could not be issued.'
+        end
         state.truck = entity
+        state.plate = plate
         return netId
     end
 
@@ -280,6 +420,7 @@ QB.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId,
         state.trailer = nil
         jobs[jobId] = nil
         jobCount = jobCount - 1
+        if Config.CooldownOnAbandon then startCooldown(source) end
         return true, { failed = true }
     end
 
@@ -321,6 +462,7 @@ QB.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId,
 
     jobs[jobId] = nil
     jobCount = jobCount - 1
+    startCooldown(source)
     return true, {
         payout = payout,
         xp = xpReward,
@@ -383,6 +525,7 @@ QB.callback.register('qbtruckerjob:server:vehicleReturned', function(source, kin
     if not entity or NetworkGetNetworkIdFromEntity(entity) ~= netId then return false end
     deleteEntity(entity)
     state[kind] = nil
+    if kind == 'truck' then removeTruckKeys(source, state) end
     return true
 end, { rateLimit = { max = 4, window = 5000 } })
 
@@ -397,6 +540,7 @@ AddEventHandler('playerDropped', function()
     if state then
         deleteEntity(state.truck)
         deleteEntity(state.trailer)
+        removeTruckKeys(source, state)
     end
     spawnedVehicles[source] = nil
 end)

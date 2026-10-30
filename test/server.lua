@@ -32,11 +32,16 @@ local nextEntity = 200
 local idCounter = 0
 local paid
 
-QB = { callback = {} }
+QB = { callback = {}, notify = {} }
+local notifications = {}
+function QB.notify.send(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
+local keyCalls = { given = {}, removed = {} }
+local keysResult = true
 function QB.callback.register(name, handler) callbacks[name] = handler end
 
 exports = {
     kora_core = {
+        getPlayerData = function() return nil end,
         getPlayer = function(_, source) return source == 1 and { source = source } or nil end,
         getMetaData = function(_, _, key) return metadata[key] end,
         setMetaData = function(_, _, key, value) metadata[key] = value; return true end,
@@ -45,7 +50,13 @@ exports = {
         addMoney = function(_, _, account, amount) paid = { account = account, amount = amount }; return true end,
         removeMoney = function() return true end,
     },
-    kora_vehiclekeys = { giveKeys = function() return true end },
+    kora_vehiclekeys = {
+        giveKeys = function(_, source, plate, allow)
+            keyCalls.given[#keyCalls.given + 1] = { source = source, plate = plate, allow = allow }
+            return keysResult
+        end,
+        removeKeys = function(_, source, plate) keyCalls.removed[#keyCalls.removed + 1] = { source = source, plate = plate } end,
+    },
 }
 
 function CreateThread(handler) threads[#threads + 1] = coroutine.create(handler) end
@@ -92,6 +103,8 @@ assert(not duplicate, 'a player must not accept a second active job')
 
 local truckNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](1, 'truck', job.id, 1))
 assert(truckNetId > 0, 'accepted job should dispatch a truck')
+assert(#keyCalls.given == 1 and keyCalls.given[1].source == 1, 'dispatching a truck must give the player keys')
+assert(keyCalls.given[1].plate == ('TRK%s'):format(job.id):sub(1, 8), 'keys must be issued for the final truck plate')
 playerCoords = vector3(Config.Coords.TrailerLocator.x, Config.Coords.TrailerLocator.y, Config.Coords.TrailerLocator.z)
 local trailerNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](1, 'trailer', job.id, 1))
 local trailer = NetworkGetEntityFromNetworkId(trailerNetId)
@@ -101,9 +114,38 @@ assert(not invalid, 'completion must reject a different trailer')
 entities[trailer].coords = vector3(acceptedJob.coords.x, acceptedJob.coords.y, acceptedJob.coords.z)
 entities[trailer].heading = acceptedJob.coords.w
 playerCoords = entities[trailer].coords
+Config.ContractCooldown = 60
+local fakeNow = os.time()
+local realTime = os.time
+os.time = function() return fakeNow end
 local completed, result = callbacks['qbtruckerjob:server:jobCompleted'](1, job.id, true, trailerNetId)
 assert(completed and result.payout > 0 and paid.amount == result.payout, 'verified delivery should pay through qbcore')
 assert(metadata.rep.trucker.XP > 0, 'verified delivery should persist trucking XP')
+
+-- Contract cooldown: completing a job blocks the next accept until the configured time passes.
+playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
+local blocked, blockedMessage = callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[4].id)
+assert(not blocked and blockedMessage:find('1m 00s', 1, true), 'cooldown should reject with the remaining time')
+assert(notifications[#notifications].source == 1 and notifications[#notifications].payload.type == 'error', 'cooldown should notify the player')
+fakeNow = fakeNow + 61
+assert(callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[4].id), 'cooldown should expire')
+
+-- Keys are removed when the truck is returned, and a key failure removes the truck.
+assert(callbacks['qbtruckerjob:server:jobAccepted'](6, dashboard.jobs[8].id))
+local keyedTruck = assert(callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3))
+assert(callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck))
+assert(#keyCalls.removed == 1 and keyCalls.removed[1].source == 6 and keyCalls.removed[1].plate == keyCalls.given[#keyCalls.given].plate, 'returning the truck must remove its keys')
+keysResult = false
+local keyDeletions = #deleted
+assert(not callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3), 'failed key issue must reject the truck')
+assert(#deleted == keyDeletions + 1, 'failed key issue must delete the spawned truck')
+keysResult = true
+Config.GiveKeys = false
+local givenBefore = #keyCalls.given
+local unkeyed = callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3)
+assert(unkeyed and #keyCalls.given == givenBefore, 'GiveKeys=false must skip the keys resource')
+callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', unkeyed)
+Config.GiveKeys = nil
 
 -- Resource stop deletes every tracked truck/trailer, including completed jobs.
 playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
@@ -132,5 +174,40 @@ assert(DoesEntityExist(foreignVehicle), 'stop must preserve vehicles this resour
 assert(#deleted == deletionsBeforeStop + 3, 'stop must delete only the three remaining tracked vehicles')
 stop(GetCurrentResourceName())
 assert(#deleted == deletionsBeforeStop + 3, 'existing missing-entity guard prevents duplicate deletion')
+
+-- Abandoning only starts the cooldown when configured.
+Config.ContractCooldown = 60
+assert(callbacks['qbtruckerjob:server:jobCompleted'](1, dashboard.jobs[4].id, false)) -- abandon: no cooldown by default
+assert(callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[5].id), 'abandoning must not start the cooldown by default')
+Config.CooldownOnAbandon = true
+assert(callbacks['qbtruckerjob:server:jobCompleted'](1, dashboard.jobs[5].id, false))
+assert(not callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[6].id), 'abandon cooldown applies when configured')
+Config.CooldownOnAbandon = false
+Config.ContractCooldown = 0
+fakeNow = fakeNow + 61
+assert(callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[6].id))
+assert(callbacks['qbtruckerjob:server:jobCompleted'](1, dashboard.jobs[6].id, false))
+assert(callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[7].id), 'cooldown 0 means off')
+assert(callbacks['qbtruckerjob:server:jobCompleted'](1, dashboard.jobs[7].id, false))
+os.time = realTime
+
+-- A skill-1 trucker always sees a contract they qualify for, even when every open one is taken.
+metadata.rep.trucker.skills = { distance = 1, cargo = 1, time = 1 }
+local function openQualifying()
+    local list = assert(callbacks['qbtruckerjob:server:dashboardRequested'](1)).jobs
+    local open = {}
+    for _, listed in ipairs(list) do
+        if not listed.active and listed.distanceLevel == 1 and listed.cargoLevel == 1 and not listed.timeLevel then open[#open + 1] = listed end
+    end
+    return open
+end
+local taker = 100
+Config.GuaranteeQualifiedJob = false
+while #openQualifying() > 0 do
+    taker = taker + 1
+    assert(callbacks['qbtruckerjob:server:jobAccepted'](taker, openQualifying()[1].id))
+end
+Config.GuaranteeQualifiedJob = true
+assert(#openQualifying() >= 1, 'a new trucker must always have a qualifying contract listed')
 
 print('qbtruckerjob server smoke tests passed')
