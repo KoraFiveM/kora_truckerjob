@@ -7,8 +7,8 @@ A server-authoritative freight job for the qbcore2 stack. Players accept generat
 - Random job generation with different skill levels and cargo types.
 - Timed and fragile job types with XP multipliers.
 - Penalties for late deliveries and damaged cargo.
-- Shared qblib AppShell for contracts, skills, and the truck fleet.
-- qblib notifications, text prompts, callbacks, and zones.
+- Shared kora_lib AppShell for contracts, skills, and the truck fleet.
+- kora_lib notifications, text prompts, callbacks, and zones.
 - Modern qbcore metadata, money, and shared-vehicle APIs.
 - Server-owned job vehicles and server-verified delivery payouts.
 - Truck return system with qbvehiclekeys integration.
@@ -20,7 +20,7 @@ Start these resources first, in order:
 
 ```cfg
 ensure qbtheme
-ensure qblib
+ensure kora_lib
 ensure qbcore
 ensure qbtarget
 ensure qbvehiclekeys
