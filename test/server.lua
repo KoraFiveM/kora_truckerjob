@@ -32,12 +32,12 @@ local nextEntity = 200
 local idCounter = 0
 local paid
 
-QB = { callback = {}, notify = {} }
+Kora = { callback = {}, notify = {} }
 local notifications = {}
-function QB.notify.send(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
+function Kora.notify.send(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
 local keyCalls = { given = {}, removed = {} }
 local keysResult = true
-function QB.callback.register(name, handler) callbacks[name] = handler end
+function Kora.callback.register(name, handler) callbacks[name] = handler end
 
 exports = {
     kora_core = {

@@ -17,7 +17,7 @@ local appDefinition
 local jobStationTarget
 
 local function notify(message, type_)
-    QB.notify.send({ title = 'Trucking', message = message, type = type_ or 'info' })
+    Kora.notify.send({ title = 'Trucking', message = message, type = type_ or 'info' })
 end
 
 local function money(value)
@@ -40,7 +40,7 @@ local function setRoute(coords)
 end
 
 local function clearPrompt()
-    if returnPrompt then QB.textui.hide(returnPrompt); returnPrompt = nil end
+    if returnPrompt then Kora.textui.hide(returnPrompt); returnPrompt = nil end
 end
 
 local function clearTrailerTarget()
@@ -88,7 +88,7 @@ end
 local function releaseTrailer()
     if not currentTrailer then return end
     local netId = NetworkGetNetworkIdFromEntity(currentTrailer)
-    QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
+    Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
     currentTrailer = nil
     removeBlip(trailerBlip)
     trailerBlip = nil
@@ -106,13 +106,13 @@ local function startTruckReturn()
     AddTextComponentSubstringPlayerName('Truck Return')
     EndTextCommandSetBlipName(truckReturnBlip)
 
-    truckReturnZone = QB.zones.sphere({
+    truckReturnZone = Kora.zones.sphere({
         coords = Config.Coords.TruckReturn,
         radius = 10.0,
         debug = Config.Debug,
         onEnter = function()
             if currentTrailer or returningTruck then return end
-            returnPrompt = QB.textui.show('Exit the vehicle to return the truck', {
+            returnPrompt = Kora.textui.show('Exit the vehicle to return the truck', {
                 icon = 'Truck', position = 'right-center',
             })
             returningTruck = true
@@ -120,7 +120,7 @@ local function startTruckReturn()
                 while returningTruck and truckReturnZone and truckReturnZone.isInside() do
                     if GetVehiclePedIsIn(PlayerPedId(), false) ~= currentTruck then
                         local netId = NetworkGetNetworkIdFromEntity(currentTruck)
-                        local returned = QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+                        local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
                         if returned then
                             currentTruck = nil
                             clearTruckReturn()
@@ -143,7 +143,7 @@ local function finishJob(successful)
     if not currentJob then return false, 'You do not have an active job.' end
     local jobId = currentJob.id
     local trailerNetId = currentTrailer and NetworkGetNetworkIdFromEntity(currentTrailer) or nil
-    local completed, result = QB.callback.trigger('qbtruckerjob:server:jobCompleted', jobId, successful, trailerNetId)
+    local completed, result = Kora.callback.trigger('qbtruckerjob:server:jobCompleted', jobId, successful, trailerNetId)
     if not completed then return false, result or 'The job could not be completed.' end
 
     removeBlip(routeBlip)
@@ -195,7 +195,7 @@ end
 
 local function createDropoffZone(job)
     clearDropoffZone()
-    dropOffZone = QB.zones.sphere({
+    dropOffZone = Kora.zones.sphere({
         coords = vector3(job.coords.x, job.coords.y, job.coords.z),
         radius = 75.0,
         debug = Config.Debug,
@@ -218,11 +218,11 @@ local function dispatchTrailer()
     local spawnId = findSpawnPoint('trailer')
     if not spawnId then return notify('There are no available trailer bays.', 'error') end
 
-    local netId, err = QB.callback.trigger('qbtruckerjob:server:vehicleRequested', 'trailer', currentJob.id, spawnId)
+    local netId, err = Kora.callback.trigger('qbtruckerjob:server:vehicleRequested', 'trailer', currentJob.id, spawnId)
     if not netId then return notify(err or 'The trailer could not be dispatched.', 'error') end
     local trailer = networkEntity(netId)
     if not trailer then
-        QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
+        Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
         return notify('The trailer did not enter the network.', 'error')
     end
 
@@ -260,11 +260,11 @@ end
 local function spawnTruck(jobId)
     local spawnId = findSpawnPoint('truck')
     if not spawnId then return false, 'There are no available truck bays.' end
-    local netId, err = QB.callback.trigger('qbtruckerjob:server:vehicleRequested', 'truck', jobId, spawnId)
+    local netId, err = Kora.callback.trigger('qbtruckerjob:server:vehicleRequested', 'truck', jobId, spawnId)
     if not netId then return false, err or 'The truck could not be dispatched.' end
     local truck = networkEntity(netId)
     if not truck then
-        QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+        Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
         return false, 'The truck did not enter the network.'
     end
 
@@ -277,7 +277,7 @@ end
 
 local function acceptJob(jobId)
     if currentJob then return false, 'You already have an active job.' end
-    local accepted, job = QB.callback.trigger('qbtruckerjob:server:jobAccepted', jobId)
+    local accepted, job = Kora.callback.trigger('qbtruckerjob:server:jobAccepted', jobId)
     if not accepted then return false, job or 'This job could not be accepted.' end
 
     currentJob = job
@@ -357,7 +357,7 @@ end
 local function truckItems()
     local result = {}
     for _, truck in ipairs(Config.Trucks) do
-        local registryVehicle = QB.shared.get('vehicles', truck.name)
+        local registryVehicle = Kora.shared.get('vehicles', truck.name)
         local label = registryVehicle and registryVehicle.name or truck.label or truck.name
         local owned = dashboard.rep.trucks[truck.name] == true
         local selected = dashboard.rep.activeTruck == truck.name
@@ -455,15 +455,15 @@ appDefinition = function()
                 local cancelled, err = finishJob(false)
                 if not cancelled then return { notice = { tone = 'destructive', message = err } } end
             elseif actionId == 'trucker:upgrade' then
-                local upgraded, repOrError = QB.callback.trigger('qbtruckerjob:server:skillUpgraded', itemId)
+                local upgraded, repOrError = Kora.callback.trigger('qbtruckerjob:server:skillUpgraded', itemId)
                 if not upgraded then return { notice = { tone = 'destructive', message = repOrError or 'Skill upgrade failed.' } } end
                 dashboard.rep = repOrError
             elseif actionId == 'trucker:purchase' then
-                local purchased, repOrError = QB.callback.trigger('qbtruckerjob:server:truckPurchased', itemId)
+                local purchased, repOrError = Kora.callback.trigger('qbtruckerjob:server:truckPurchased', itemId)
                 if not purchased then return { notice = { tone = 'destructive', message = repOrError or 'Truck purchase failed.' } } end
                 dashboard.rep = repOrError
             elseif actionId == 'trucker:select' then
-                local selected, repOrError = QB.callback.trigger('qbtruckerjob:server:truckSelected', itemId)
+                local selected, repOrError = Kora.callback.trigger('qbtruckerjob:server:truckSelected', itemId)
                 if not selected then return { notice = { tone = 'destructive', message = repOrError or 'Truck selection failed.' } } end
                 dashboard.rep = repOrError
             else
@@ -485,7 +485,7 @@ local function openDispatch()
     appActive = true
     CreateThread(function()
         local ok, err = pcall(function()
-            local snapshot, loadError = QB.callback.trigger('qbtruckerjob:server:dashboardRequested')
+            local snapshot, loadError = Kora.callback.trigger('qbtruckerjob:server:dashboardRequested')
             if not snapshot then return notify(loadError or 'Freight dispatch is unavailable.', 'error') end
             dashboard = snapshot
             if dashboard.activeJobId and not currentJob then
@@ -493,8 +493,8 @@ local function openDispatch()
                     if job.id == dashboard.activeJobId then currentJob = job; break end
                 end
             end
-            QB.nui.registerApp(appDefinition())
-            QB.nui.openApp(APP_ID)
+            Kora.nui.registerApp(appDefinition())
+            Kora.nui.openApp(APP_ID)
         end)
         dashboard = nil
         appActive = false
@@ -525,7 +525,7 @@ end
 registerJobStationTarget()
 
 CreateThread(function()
-    QB.blips.create(Config.Coords.JobStation, {
+    Kora.blips.create(Config.Coords.JobStation, {
         sprite = 477,
         color = 2,
         scale = 0.8,
@@ -553,7 +553,7 @@ AddEventHandler('gameEventTriggered', function(name, args)
         finishJob(false)
     elseif currentTruck and entity == currentTruck then
         local netId = NetworkGetNetworkIdFromEntity(currentTruck)
-        QB.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+        Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
         currentTruck = nil
         clearTruckReturn()
         if currentJob then finishJob(false) end
