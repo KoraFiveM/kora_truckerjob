@@ -14,6 +14,11 @@ Config = {
     GiveKeys = true, -- Give the player keys to the dispatched truck (trailers have no ignition, so get none)
     KeysResource = 'kora_vehiclekeys', -- Resource exporting giveKeys/removeKeys
 
+    Return = {
+        requireVehicleInZone = true, -- The job truck itself must be at the return point before it counts as returned (false = old behaviour: only the player must be in the zone)
+        maxDistance = 15.0, -- Metres from Config.Coords.TruckReturn the truck may be, checked server-side (the client zone radius is 10.0)
+    },
+
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 
     XPReward = 75, -- XP reward for completing a job

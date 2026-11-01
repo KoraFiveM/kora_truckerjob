@@ -119,14 +119,24 @@ local function startTruckReturn()
             CreateThread(function()
                 while returningTruck and truckReturnZone and truckReturnZone.isInside() do
                     if GetVehiclePedIsIn(PlayerPedId(), false) ~= currentTruck then
-                        local netId = NetworkGetNetworkIdFromEntity(currentTruck)
-                        local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
-                        if returned then
-                            currentTruck = nil
-                            clearTruckReturn()
-                            notify('Truck returned to the depot.', 'success')
+                        local settings = Config.Return or {}
+                        local atReturn = settings.requireVehicleInZone == false
+                            or not DoesEntityExist(currentTruck)
+                            or #(GetEntityCoords(currentTruck) - Config.Coords.TruckReturn) <= (settings.maxDistance or 15.0)
+                        if atReturn then
+                            local netId = NetworkGetNetworkIdFromEntity(currentTruck)
+                            local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+                            if returned then
+                                currentTruck = nil
+                                clearTruckReturn()
+                                notify('Truck returned to the depot.', 'success')
+                                return
+                            end
+                            Wait(3000) -- the server already told the player why
+                        else
+                            notify('Bring the truck to the return point first.', 'error')
+                            Wait(5000)
                         end
-                        return
                     end
                     Wait(250)
                 end

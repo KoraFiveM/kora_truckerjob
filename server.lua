@@ -517,13 +517,34 @@ Kora.callback.register('qbtruckerjob:server:truckSelected', function(source, spa
     return true, trucker
 end, { rateLimit = { max = 3, window = 5000 } })
 
+-- A truck that is gone or wrecked can always be handed back: there is nothing left to return to the depot.
+local function vehicleIsWrecked(entity)
+    if not DoesEntityExist(entity) then return true end
+    if GetEntityHealth(entity) <= 0 then return true end
+    return GetVehicleEngineHealth ~= nil and GetVehicleEngineHealth(entity) <= 0
+end
+
+local function vehicleIsAtReturn(entity)
+    local settings = Config.Return or {}
+    if settings.requireVehicleInZone == false then return true end
+    return #(GetEntityCoords(entity) - vector3(Config.Coords.TruckReturn.x, Config.Coords.TruckReturn.y, Config.Coords.TruckReturn.z))
+        <= (settings.maxDistance or 15.0)
+end
+
 Kora.callback.register('qbtruckerjob:server:vehicleReturned', function(source, kind, netId)
     if kind ~= 'truck' and kind ~= 'trailer' then return false end
     if not isInteger(netId) or netId <= 0 then return false end
     local state = spawnedVehicles[source]
     local entity = state and state[kind]
-    if not entity or NetworkGetNetworkIdFromEntity(entity) ~= netId then return false end
-    deleteEntity(entity)
+    if not entity then return false end
+    local exists = DoesEntityExist(entity)
+    if exists and NetworkGetNetworkIdFromEntity(entity) ~= netId then return false end
+    -- Only the truck must be brought back; trailers are also released when a contract is abandoned or fails.
+    if kind == 'truck' and not vehicleIsWrecked(entity) and not vehicleIsAtReturn(entity) then
+        Kora.notify.send(source, { title = 'Trucking', message = 'Bring the truck to the return point first.', type = 'error' })
+        return false, 'Bring the truck to the return point first.'
+    end
+    if exists then deleteEntity(entity) end
     state[kind] = nil
     if kind == 'truck' then removeTruckKeys(source, state) end
     return true
