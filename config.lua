@@ -27,6 +27,23 @@ Config = {
         targetRadius = 0.75, -- Radius of the kora_target eye zone at the locator (was hard-coded)
     },
 
+    Delivery = {
+        showMarker = true, -- Draw the drop-zone marker at the delivery point (green = trailer parked correctly, red = not yet)
+        textUI = true, -- Show on-screen guidance while inside the delivery area
+        notifyOnArrival = true, -- Notify the driver when they reach the delivery area
+        detachKey = 74, -- Control id that detaches the trailer once it is parked in the marker (74 = H)
+        detachKeyLabel = 'H', -- Key name shown in the prompts
+        approachText = 'Reverse the trailer into the marker', -- Shown until the trailer is lined up
+        detachText = 'Press {key} to detach the trailer and deliver', -- Shown when parked but still hitched; {key} = detachKeyLabel
+        arrivalMessage = 'Back the trailer into the marked bay (it turns green when aligned), then detach it with {key}.',
+    },
+
+    TruckLost = {
+        enabled = true, -- Detect a job truck that was deleted/despawned and end the job gracefully
+        checkInterval = 1000, -- Milliseconds between existence checks
+        message = 'Your truck is gone. The contract has been closed.', -- No deposit exists, so no penalty; Config.CooldownOnAbandon still applies if enabled
+    },
+
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 
     XPReward = 75, -- XP reward for completing a job

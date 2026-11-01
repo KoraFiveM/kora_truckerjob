@@ -3,6 +3,8 @@ local appActive = false
 local dashboard
 local currentJob
 local currentTruck
+local currentTruckNetId
+local deliveryPrompt
 local currentTrailer
 local trailerTarget
 local trailerZone
@@ -51,7 +53,18 @@ local function clearTrailerTarget()
     if trailerZone then trailerZone.remove(); trailerZone = nil end
 end
 
+local function clearDeliveryPrompt()
+    if deliveryPrompt then Kora.textui.hide(deliveryPrompt.id); deliveryPrompt = nil end
+end
+
+local function setDeliveryPrompt(state, text)
+    if deliveryPrompt and deliveryPrompt.state == state then return end
+    clearDeliveryPrompt()
+    deliveryPrompt = { state = state, id = Kora.textui.show(text, { icon = 'Truck', position = 'right-center' }) }
+end
+
 local function clearDropoffZone()
+    clearDeliveryPrompt()
     isInDropoffZone = false
     if dropOffZone then dropOffZone.remove(); dropOffZone = nil end
 end
@@ -83,6 +96,12 @@ local function networkEntity(netId)
     end
 end
 
+local function vehicleIsGone(entity, netId)
+    if not entity or entity == 0 or not DoesEntityExist(entity) then return true end
+    if netId and not NetworkDoesNetworkIdExist(netId) then return true end
+    return false
+end
+
 local function trailerIsParked(coords, heading, trailer)
     if not trailer or trailer == 0 or not DoesEntityExist(trailer) then return false end
     local difference = math.abs((GetEntityHeading(trailer) - heading + 180.0) % 360.0 - 180.0)
@@ -91,8 +110,10 @@ end
 
 local function releaseTrailer()
     if not currentTrailer then return end
-    local netId = NetworkGetNetworkIdFromEntity(currentTrailer)
-    Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
+    if DoesEntityExist(currentTrailer) then
+        local netId = NetworkGetNetworkIdFromEntity(currentTrailer)
+        Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'trailer', netId)
+    end
     currentTrailer = nil
     removeBlip(trailerBlip)
     trailerBlip = nil
@@ -125,13 +146,13 @@ local function startTruckReturn()
                     if GetVehiclePedIsIn(PlayerPedId(), false) ~= currentTruck then
                         local settings = Config.Return or {}
                         local atReturn = settings.requireVehicleInZone == false
-                            or not DoesEntityExist(currentTruck)
+                            or vehicleIsGone(currentTruck, currentTruckNetId)
                             or #(GetEntityCoords(currentTruck) - Config.Coords.TruckReturn) <= (settings.maxDistance or 15.0)
                         if atReturn then
-                            local netId = NetworkGetNetworkIdFromEntity(currentTruck)
-                            local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+                            local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', currentTruckNetId)
                             if returned then
                                 currentTruck = nil
+                                currentTruckNetId = nil
                                 clearTruckReturn()
                                 notify('Truck returned to the depot.', 'success')
                                 return
@@ -156,7 +177,7 @@ end
 local function finishJob(successful)
     if not currentJob then return false, 'You do not have an active job.' end
     local jobId = currentJob.id
-    local trailerNetId = currentTrailer and NetworkGetNetworkIdFromEntity(currentTrailer) or nil
+    local trailerNetId = currentTrailer and DoesEntityExist(currentTrailer) and NetworkGetNetworkIdFromEntity(currentTrailer) or nil
     local completed, result = Kora.callback.trigger('qbtruckerjob:server:jobCompleted', jobId, successful, trailerNetId)
     if not completed then return false, result or 'The job could not be completed.' end
 
@@ -188,15 +209,35 @@ end
 
 local function watchDelivery(job)
     local coords = vector3(job.coords.x, job.coords.y, job.coords.z - 1.0)
+    local settings = Config.Delivery or {}
+    local key = settings.detachKey or 74
+    local keyLabel = settings.detachKeyLabel or 'H'
     CreateThread(function()
         while isInDropoffZone and currentJob and currentJob.id == job.id do
             local parked = trailerIsParked(coords, job.coords.w, currentTrailer)
-            local colour = parked and { r = 0, g = 185, b = 0 } or { r = 255, g = 0, b = 0 }
-            DrawMarker(30, coords, 0.0, 0.0, 1.0, 0.0,
-                job.coords.w > 180 and 540 - job.coords.w or 180 - job.coords.w,
-                0.0, 3.0, 3.0, 5.0, colour.r, colour.g, colour.b, 185,
-                false, false, 2, false, nil, nil, false)
-            if parked and not IsEntityAttached(currentTrailer) then
+            if settings.showMarker ~= false then
+                local colour = parked and { r = 0, g = 185, b = 0 } or { r = 255, g = 0, b = 0 }
+                DrawMarker(30, coords, 0.0, 0.0, 1.0, 0.0,
+                    job.coords.w > 180 and 540 - job.coords.w or 180 - job.coords.w,
+                    0.0, 3.0, 3.0, 5.0, colour.r, colour.g, colour.b, 185,
+                    false, false, 2, false, nil, nil, false)
+            end
+            local attached = currentTrailer and DoesEntityExist(currentTrailer) and IsEntityAttached(currentTrailer)
+            if settings.textUI ~= false then
+                if parked and attached then
+                    local text = (settings.detachText or 'Press {key} to detach the trailer and deliver'):gsub('{key}', keyLabel)
+                    setDeliveryPrompt('detach', text)
+                elseif not parked then
+                    setDeliveryPrompt('approach', settings.approachText or 'Reverse the trailer into the marker')
+                else
+                    clearDeliveryPrompt()
+                end
+            end
+            if parked and attached and IsControlJustReleased(0, key) and currentTruck and DoesEntityExist(currentTruck) then
+                DetachVehicleFromTrailer(currentTruck)
+            end
+            if parked and not attached then
+                clearDeliveryPrompt()
                 local completed, err = finishJob(true)
                 if completed then return end
                 notify(err, 'error')
@@ -204,6 +245,7 @@ local function watchDelivery(job)
             end
             Wait(0)
         end
+        clearDeliveryPrompt()
     end)
 end
 
@@ -215,6 +257,12 @@ local function createDropoffZone(job)
         debug = Config.Debug,
         onEnter = function()
             isInDropoffZone = true
+            local settings = Config.Delivery or {}
+            if settings.notifyOnArrival ~= false then
+                local message = (settings.arrivalMessage or 'Back the trailer into the marked bay, then detach it with {key}.')
+                    :gsub('{key}', settings.detachKeyLabel or 'H')
+                notify(message, 'info')
+            end
             watchDelivery(job)
         end,
         onExit = function()
@@ -303,6 +351,34 @@ local function createTrailerTarget()
     })
 end
 
+-- The truck was deleted/despawned behind our back: clean up and close the job without touching dead network ids.
+local function handleTruckLost()
+    local netId = currentTruckNetId
+    currentTruck = nil
+    currentTruckNetId = nil
+    clearTruckReturn()
+    if netId then Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId) end
+    local settings = Config.TruckLost or {}
+    notify(settings.message or 'Your truck is gone. The contract has been closed.', 'error')
+    if currentJob then finishJob(false) end
+    removeBlip(routeBlip)
+    routeBlip = nil
+end
+
+local function watchTruck(truck)
+    local settings = Config.TruckLost or {}
+    if settings.enabled == false then return end
+    CreateThread(function()
+        while currentTruck == truck do
+            if vehicleIsGone(truck, currentTruckNetId) then
+                handleTruckLost()
+                return
+            end
+            Wait(settings.checkInterval or 1000)
+        end
+    end)
+end
+
 local function spawnTruck(jobId)
     local spawnId = findSpawnPoint('truck')
     if not spawnId then return false, 'There are no available truck bays.' end
@@ -315,9 +391,11 @@ local function spawnTruck(jobId)
     end
 
     currentTruck = truck
+    currentTruckNetId = netId
     if type(Config.FuelResource) == 'string' and GetResourceState(Config.FuelResource) == 'started' then
         pcall(function() exports[Config.FuelResource]:SetFuel(currentTruck, math.random(50, 70)) end)
     end
+    watchTruck(truck)
     return true
 end
 
@@ -598,9 +676,10 @@ AddEventHandler('gameEventTriggered', function(name, args)
         notify('Your trailer was destroyed.', 'error')
         finishJob(false)
     elseif currentTruck and entity == currentTruck then
-        local netId = NetworkGetNetworkIdFromEntity(currentTruck)
-        Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+        local netId = currentTruckNetId
         currentTruck = nil
+        currentTruckNetId = nil
+        if netId then Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId) end
         clearTruckReturn()
         if currentJob then finishJob(false) end
     end
