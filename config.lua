@@ -19,6 +19,14 @@ Config = {
         maxDistance = 15.0, -- Metres from Config.Coords.TruckReturn the truck may be, checked server-side (the client zone radius is 10.0)
     },
 
+    TrailerPickup = {
+        zoneRadius = 8.0, -- Metres around Config.Coords.TrailerLocator in which the dispatch prompt shows, on foot or in a truck (0 = disable the prompt, eye-target only)
+        allowInVehicle = true, -- Show the prompt while sitting in a vehicle (false = on foot only)
+        key = 38, -- Control id pressed to dispatch (38 = E)
+        prompt = 'Press E to dispatch your assigned trailer', -- Prompt text
+        targetRadius = 0.75, -- Radius of the kora_target eye zone at the locator (was hard-coded)
+    },
+
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 
     XPReward = 75, -- XP reward for completing a job

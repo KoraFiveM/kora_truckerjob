@@ -5,6 +5,8 @@ local currentJob
 local currentTruck
 local currentTrailer
 local trailerTarget
+local trailerZone
+local trailerPrompt
 local dropOffZone
 local truckReturnZone
 local isInDropoffZone = false
@@ -45,6 +47,8 @@ end
 
 local function clearTrailerTarget()
     if trailerTarget then exports.kora_target:removeZone(trailerTarget); trailerTarget = nil end
+    if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+    if trailerZone then trailerZone.remove(); trailerZone = nil end
 end
 
 local function clearDropoffZone()
@@ -249,12 +253,44 @@ local function dispatchTrailer()
     createDropoffZone(currentJob)
 end
 
+local function createTrailerZone()
+    local settings = Config.TrailerPickup or {}
+    if settings.zoneRadius == 0 then return end
+    local key = settings.key or 38
+    trailerZone = Kora.zones.sphere({
+        coords = Config.Coords.TrailerLocator,
+        radius = settings.zoneRadius or 8.0,
+        debug = Config.Debug,
+        onEnter = function()
+            if trailerPrompt or currentTrailer then return end
+            if settings.allowInVehicle == false and GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then return end
+            trailerPrompt = Kora.textui.show(settings.prompt or 'Press E to dispatch your assigned trailer', {
+                icon = 'Truck', position = 'right-center',
+            })
+            CreateThread(function()
+                while trailerPrompt and trailerZone and trailerZone.isInside() do
+                    if IsControlJustReleased(0, key) then
+                        dispatchTrailer()
+                        if currentTrailer then break end
+                    end
+                    Wait(0)
+                end
+                if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+            end)
+        end,
+        onExit = function()
+            if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+        end,
+    })
+end
+
 local function createTrailerTarget()
     clearTrailerTarget()
     setRoute(Config.Coords.TrailerLocator)
+    createTrailerZone()
     trailerTarget = exports.kora_target:addSphereZone({
         coords = Config.Coords.TrailerLocator,
-        radius = 0.75,
+        radius = (Config.TrailerPickup or {}).targetRadius or 0.75,
         distance = 2.5,
         debug = Config.Debug,
         options = {
