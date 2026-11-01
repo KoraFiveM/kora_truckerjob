@@ -17,7 +17,6 @@ local routeBlip
 local trailerBlip
 local truckReturnBlip
 local returnPrompt
-local appDefinition
 local jobStationTarget
 
 local function notify(message, type_)
@@ -47,9 +46,13 @@ local function clearPrompt()
     if returnPrompt then Kora.textui.hide(returnPrompt); returnPrompt = nil end
 end
 
+local function clearTrailerPrompt()
+    if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+end
+
 local function clearTrailerTarget()
     if trailerTarget then exports.kora_target:removeZone(trailerTarget); trailerTarget = nil end
-    if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+    clearTrailerPrompt()
     if trailerZone then trailerZone.remove(); trailerZone = nil end
 end
 
@@ -323,11 +326,11 @@ local function createTrailerZone()
                     end
                     Wait(0)
                 end
-                if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+                clearTrailerPrompt()
             end)
         end,
         onExit = function()
-            if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+            clearTrailerPrompt()
         end,
     })
 end
@@ -509,7 +512,7 @@ local function truckItems()
     return result
 end
 
-appDefinition = function()
+local function appDefinition()
     local rep = dashboard.rep
     local xpProgress = rep.XP % 1000
     local activeActions = dashboard.activeJobId and {

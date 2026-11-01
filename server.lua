@@ -4,7 +4,6 @@ local spawnedVehicles = {}
 local cooldowns = {} -- [citizenid or source] = os.time() the player may accept the next contract
 
 local skillDistances = { 1500, 3000, 5000, 7000 }
-local truckDefinition
 
 local function isInteger(value)
     return type(value) == 'number' and value % 1 == 0
@@ -18,6 +17,13 @@ local function playerIsNear(source, coords, maximumDistance)
     local ped = GetPlayerPed(source)
     if not ped or ped == 0 then return false end
     return #(GetEntityCoords(ped) - vector3(coords.x, coords.y, coords.z)) <= maximumDistance
+end
+
+local function truckDefinition(spawnName)
+    if type(spawnName) ~= 'string' then return nil end
+    for _, truck in ipairs(Config.Trucks) do
+        if truck.name == spawnName then return truck end
+    end
 end
 
 local function normaliseTruckerRep(source)
@@ -184,8 +190,7 @@ local function formatDuration(seconds)
 end
 
 local function cooldownKey(source)
-    local citizenid = exports.kora_core:getPlayerData(source, { 'citizenid' })
-    return citizenid or source
+    return exports.kora_core:getPlayerData(source, { 'citizenid' }) or source
 end
 
 local function startCooldown(source)
@@ -305,13 +310,6 @@ local function spawnVehicle(source, model, vehicleType, coords, plate)
         return nil, 'Vehicle network registration failed.'
     end
     return entity, netId
-end
-
-truckDefinition = function(spawnName)
-    if type(spawnName) ~= 'string' then return nil end
-    for _, truck in ipairs(Config.Trucks) do
-        if truck.name == spawnName then return truck end
-    end
 end
 
 local function headingDifference(left, right)
