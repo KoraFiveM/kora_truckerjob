@@ -133,8 +133,29 @@ assert(callbacks['qbtruckerjob:server:jobAccepted'](1, dashboard.jobs[4].id), 'c
 -- Keys are removed when the truck is returned, and a key failure removes the truck.
 assert(callbacks['qbtruckerjob:server:jobAccepted'](6, dashboard.jobs[8].id))
 local keyedTruck = assert(callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3))
+-- Return must be refused while the truck is away from the return point, whatever the player position.
+local returnPoint = vector3(Config.Coords.TruckReturn.x, Config.Coords.TruckReturn.y, Config.Coords.TruckReturn.z)
+playerCoords = returnPoint
+local notifiedBefore = #notifications
+local refused = callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck)
+assert(not refused and #notifications == notifiedBefore + 1 and #keyCalls.removed == 0, 'a far truck must not be returned, keys kept')
+assert(DoesEntityExist(NetworkGetEntityFromNetworkId(keyedTruck)), 'a refused return must keep the truck')
+local keyedEntity = NetworkGetEntityFromNetworkId(keyedTruck)
+entities[keyedEntity].coords = vector3(returnPoint.x + Config.Return.maxDistance + 5, returnPoint.y, returnPoint.z)
+assert(not callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck), 'just outside maxDistance is refused')
+Config.Return.requireVehicleInZone = false
+assert(callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck), 'requireVehicleInZone=false keeps the old behaviour')
+Config.Return.requireVehicleInZone = true
+playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
+local wreckJob = dashboard.jobs[8].id
+local wreck = assert(callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', wreckJob, 3))
+entities[NetworkGetEntityFromNetworkId(wreck)].health = 0
+assert(callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', wreck), 'a wrecked truck can be handed back from anywhere')
+keyedTruck = assert(callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', wreckJob, 3))
+entities[NetworkGetEntityFromNetworkId(keyedTruck)].coords = returnPoint
 assert(callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck))
-assert(#keyCalls.removed == 1 and keyCalls.removed[1].source == 6 and keyCalls.removed[1].plate == keyCalls.given[#keyCalls.given].plate, 'returning the truck must remove its keys')
+assert(#keyCalls.removed == 3 and keyCalls.removed[3].source == 6 and keyCalls.removed[3].plate == keyCalls.given[#keyCalls.given].plate, 'returning the truck must remove its keys')
+playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
 keysResult = false
 local keyDeletions = #deleted
 assert(not callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3), 'failed key issue must reject the truck')
@@ -144,6 +165,7 @@ Config.GiveKeys = false
 local givenBefore = #keyCalls.given
 local unkeyed = callbacks['qbtruckerjob:server:vehicleRequested'](6, 'truck', dashboard.jobs[8].id, 3)
 assert(unkeyed and #keyCalls.given == givenBefore, 'GiveKeys=false must skip the keys resource')
+entities[NetworkGetEntityFromNetworkId(unkeyed)].coords = returnPoint
 callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', unkeyed)
 Config.GiveKeys = nil
 
@@ -154,6 +176,7 @@ assert(callbacks['qbtruckerjob:server:jobAccepted'](2, secondJob.id))
 local secondTruckNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](2, 'truck', secondJob.id, 2))
 playerCoords = vector3(Config.Coords.TrailerLocator.x, Config.Coords.TrailerLocator.y, Config.Coords.TrailerLocator.z)
 local secondTrailerNetId = assert(callbacks['qbtruckerjob:server:vehicleRequested'](2, 'trailer', secondJob.id, 2))
+entities[NetworkGetEntityFromNetworkId(secondTruckNetId)].coords = returnPoint
 assert(callbacks['qbtruckerjob:server:vehicleReturned'](2, 'truck', secondTruckNetId))
 assert(not DoesEntityExist(NetworkGetEntityFromNetworkId(secondTruckNetId)), 'normal return should delete its assigned vehicle')
 playerCoords = vector3(Config.Coords.JobStation.x, Config.Coords.JobStation.y, Config.Coords.JobStation.z)
