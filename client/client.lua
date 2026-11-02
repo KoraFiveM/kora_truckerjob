@@ -12,7 +12,9 @@ local trailerPrompt
 local dropOffZone
 local truckReturnZone
 local isInDropoffZone = false
-local returningTruck = false
+local inReturnZone = false
+local returnPending = false
+local awayNotified = false
 local routeBlip
 local trailerBlip
 local truckReturnBlip
@@ -43,7 +45,13 @@ local function setRoute(coords)
 end
 
 local function clearPrompt()
-    if returnPrompt then Kora.textui.hide(returnPrompt); returnPrompt = nil end
+    if returnPrompt then Kora.textui.hide(returnPrompt.id); returnPrompt = nil end
+end
+
+local function setReturnPrompt(state, text)
+    if returnPrompt and returnPrompt.state == state then return end
+    clearPrompt()
+    returnPrompt = { state = state, id = Kora.textui.show(text, { icon = 'Truck', position = 'right-center' }) }
 end
 
 local function clearTrailerPrompt()
@@ -74,7 +82,7 @@ end
 
 local function clearTruckReturn()
     clearPrompt()
-    returningTruck = false
+    inReturnZone = false
     removeBlip(truckReturnBlip)
     truckReturnBlip = nil
     if truckReturnZone then truckReturnZone.remove(); truckReturnZone = nil end
@@ -122,6 +130,69 @@ local function releaseTrailer()
     trailerBlip = nil
 end
 
+-- Client pre-check only: the server re-checks the truck's position before it deletes anything.
+local function truckIsAtReturn()
+    local settings = Config.Return or {}
+    if settings.requireVehicleInZone == false then return true end
+    if vehicleIsGone(currentTruck, currentTruckNetId) then return true end -- the server accepts a truck that no longer exists
+    return #(GetEntityCoords(currentTruck) - Config.Coords.TruckReturn) <= (settings.maxDistance or 15.0)
+end
+
+local function showTruckAway(message)
+    local settings = Config.Return or {}
+    local text = message or settings.awayMessage or 'Bring the truck to the return point first.'
+    if settings.awayMode == 'notify' then
+        clearPrompt()
+        if not awayNotified then
+            awayNotified = true
+            notify(text, 'error')
+        end
+    elseif settings.awayMode ~= false then
+        setReturnPrompt('away', text)
+    end
+end
+
+local function attemptTruckReturn()
+    if returnPending then return end
+    returnPending = true
+    clearPrompt()
+    local netId = currentTruckNetId
+    CreateThread(function()
+        local returned, err = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', netId)
+        returnPending = false
+        if returned then
+            if currentTruckNetId == netId then
+                currentTruck = nil
+                currentTruckNetId = nil
+            end
+            clearTruckReturn()
+            notify((Config.Return or {}).returnedMessage or 'Truck returned to the depot.', 'success')
+        elseif inReturnZone then
+            showTruckAway(err)
+        end
+    end)
+end
+
+-- Runs only on return-zone enter and on cached vehicle/seat changes, never on a timer, so each
+-- message is shown once per state instead of being re-sent while the player stands in the zone.
+local function refreshTruckReturn()
+    if returnPending then return end
+    if not truckReturnZone or not inReturnZone or not currentTruck or currentTrailer then return clearPrompt() end
+
+    local settings = Config.Return or {}
+    if Kora.cache.vehicle() == currentTruck then
+        if Kora.cache.seat() == -1 then
+            setReturnPrompt('exit', settings.exitPrompt or 'Exit the vehicle to return the truck')
+        else
+            clearPrompt()
+        end
+    elseif truckIsAtReturn() then
+        attemptTruckReturn()
+    else
+        showTruckAway()
+    end
+end
+
 local function startTruckReturn()
     if truckReturnZone or not currentTruck then return end
 
@@ -136,46 +207,29 @@ local function startTruckReturn()
 
     truckReturnZone = Kora.zones.sphere({
         coords = Config.Coords.TruckReturn,
-        radius = 10.0,
+        radius = (Config.Return or {}).zoneRadius or 10.0,
         debug = Config.Debug,
         onEnter = function()
-            if currentTrailer or returningTruck then return end
-            returnPrompt = Kora.textui.show('Exit the vehicle to return the truck', {
-                icon = 'Truck', position = 'right-center',
-            })
-            returningTruck = true
-            CreateThread(function()
-                while returningTruck and truckReturnZone and truckReturnZone.isInside() do
-                    if GetVehiclePedIsIn(PlayerPedId(), false) ~= currentTruck then
-                        local settings = Config.Return or {}
-                        local atReturn = settings.requireVehicleInZone == false
-                            or vehicleIsGone(currentTruck, currentTruckNetId)
-                            or #(GetEntityCoords(currentTruck) - Config.Coords.TruckReturn) <= (settings.maxDistance or 15.0)
-                        if atReturn then
-                            local returned = Kora.callback.trigger('qbtruckerjob:server:vehicleReturned', 'truck', currentTruckNetId)
-                            if returned then
-                                currentTruck = nil
-                                currentTruckNetId = nil
-                                clearTruckReturn()
-                                notify('Truck returned to the depot.', 'success')
-                                return
-                            end
-                            Wait(3000) -- the server already told the player why
-                        else
-                            notify('Bring the truck to the return point first.', 'error')
-                            Wait(5000)
-                        end
-                    end
-                    Wait(250)
-                end
-            end)
+            inReturnZone = true
+            awayNotified = false
+            refreshTruckReturn()
         end,
         onExit = function()
+            inReturnZone = false
             clearPrompt()
-            returningTruck = false
         end,
     })
 end
+
+-- Seat updates before vehicle in the kora_lib cache, so only react here to seat swaps inside the truck;
+-- getting in or out is handled by the vehicle change that follows.
+Kora.cache.onChange('seat', function()
+    if truckReturnZone and currentTruck and Kora.cache.vehicle() == currentTruck then refreshTruckReturn() end
+end)
+
+Kora.cache.onChange('vehicle', function()
+    if truckReturnZone then refreshTruckReturn() end
+end)
 
 local function finishJob(successful)
     if not currentJob then return false, 'You do not have an active job.' end

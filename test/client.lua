@@ -40,7 +40,8 @@ function GetCurrentResourceName() return 'kora_truckerjob' end
 function GetResourceState() return 'missing' end
 function PlayerPedId() return 1 end
 function GetVehiclePedIsIn() return pedInside and TRUCK or 0 end
-function GetEntityCoords() return vector3(0, 0, 0) end
+local truckCoords = vector3(0, 0, 0)
+function GetEntityCoords(entity) return entity == TRUCK and truckCoords or vector3(0, 0, 0) end
 function GetEntityHeading() return 90.0 end
 function IsAnyVehicleNearPoint() return false end
 function DoesEntityExist(entity)
@@ -73,7 +74,23 @@ function AddEventHandler() end
 
 local zones = {}
 local nextPrompt = 0
+local holdApp = false
+local cacheState, cacheHandlers = { vehicle = false, seat = false }, {}
+local function setCache(key, value)
+    local old = cacheState[key]
+    if old == value then return end
+    cacheState[key] = value
+    for _, handler in ipairs(cacheHandlers[key] or {}) do handler(value, old) end
+end
 Kora = {
+    cache = {
+        vehicle = function() return cacheState.vehicle end,
+        seat = function() return cacheState.seat end,
+        onChange = function(key, handler)
+            cacheHandlers[key] = cacheHandlers[key] or {}
+            table.insert(cacheHandlers[key], handler)
+        end,
+    },
     notify = { send = function(payload) notices[#notices + 1] = payload.message end },
     textui = {
         show = function(text) nextPrompt = nextPrompt + 1; prompts[#prompts + 1] = text; return nextPrompt end,
@@ -86,7 +103,7 @@ Kora = {
     end },
     blips = { create = function() end },
     shared = { get = function() end },
-    nui = { registerApp = function(def) Kora.app = def end, openApp = function() end },
+    nui = { registerApp = function(def) Kora.app = def end, openApp = function() while holdApp do Wait(100) end end },
     callback = { trigger = function(name, ...)
         local args = { ... }
         calls[#calls + 1] = { name = name, args = args }
@@ -167,4 +184,69 @@ for _, call in ipairs(calls) do
 end
 assert(releases == 1, 'server told to release the truck once')
 assert(#removedBlips > 0, 'blips removed')
+
+-- Truck return zone: event-driven prompts, no repeating notifications.
+truckAlive = true
+holdApp = true -- keep the dispatch open so the dashboard stays loaded for cancel
+exported.openDispatch(); tick(); tick()
+CreateThread(function() assert(Kora.app.onAction('trucker:accept', { itemId = 'J1' }).close) end)
+tick(); tick()
+CreateThread(function() Kora.app.onAction('trucker:cancel', { itemId = 'J1' }) end)
+tick(); tick()
+holdApp = false
+local returnZone
+for _, zone in ipairs(zones) do if zone.opts.radius == Config.Return.zoneRadius then returnZone = zone end end
+assert(returnZone, 'return zone created after cancelling')
+local function shown(text)
+    local total = 0
+    for _, prompt in ipairs(prompts) do if prompt == text then total = total + 1 end end
+    return total
+end
+local function returnCalls()
+    local total = 0
+    for _, call in ipairs(calls) do
+        if call.name == 'qbtruckerjob:server:vehicleReturned' and call.args[1] == 'truck' then total = total + 1 end
+    end
+    return total
+end
+
+-- On foot, truck parked elsewhere: no exit prompt, the away message shows once and stays.
+truckCoords = vector3(0, 0, 0)
+local noticesAtEntry, returnsAtEntry, hiddenAtEntry = #notices, returnCalls(), #hidden
+returnZone.opts.onEnter()
+for _ = 1, 50 do tick(500) end
+assert(shown(Config.Return.exitPrompt) == 0, 'exit prompt never shown on foot')
+assert(shown(Config.Return.awayMessage) == 1 and prompts[#prompts] == Config.Return.awayMessage, 'away message shown once as text UI')
+assert(#notices == noticesAtEntry and #hidden == hiddenAtEntry, 'nothing re-sent while standing in the zone')
+assert(returnCalls() == returnsAtEntry, 'server not asked while the truck is away')
+returnZone.opts.onExit()
+assert(#hidden == hiddenAtEntry + 1, 'away text UI hidden when leaving the zone')
+
+-- notify mode: one notification per zone visit.
+Config.Return.awayMode = 'notify'
+returnZone.opts.onEnter()
+for _ = 1, 50 do tick(500) end
+setCache('vehicle', 777); setCache('vehicle', false) -- hopping in and out of another car does not re-notify
+assert(#notices == noticesAtEntry + 1 and notices[#notices] == Config.Return.awayMessage, 'notify mode notifies once')
+returnZone.opts.onExit()
+Config.Return.awayMode = 'textui'
+
+-- Driving the truck in shows the exit prompt; passenger seat does not; getting out returns it.
+truckCoords = vector3(Config.Coords.TruckReturn)
+setCache('seat', -1); setCache('vehicle', TRUCK)
+assert(returnCalls() == returnsAtEntry, 'entering the truck outside the zone does nothing')
+local promptsBefore = shown(Config.Return.exitPrompt)
+returnZone.opts.onEnter()
+assert(shown(Config.Return.exitPrompt) == promptsBefore + 1, 'exit prompt shown in the driver seat')
+setCache('seat', 0)
+assert(#hidden == hiddenAtEntry + 2, 'exit prompt hidden in a passenger seat')
+setCache('seat', -1)
+assert(shown(Config.Return.exitPrompt) == promptsBefore + 2, 'exit prompt back in the driver seat')
+setCache('seat', false); setCache('vehicle', false)
+tick(); tick()
+assert(returnCalls() == returnsAtEntry + 1, 'leaving the truck in the zone returns it once')
+assert(notices[#notices] == Config.Return.returnedMessage, 'player told the truck was returned')
+setCache('vehicle', 777); setCache('vehicle', false)
+tick()
+assert(returnCalls() == returnsAtEntry + 1, 'no further return attempts after the truck is gone')
 print('qbtruckerjob client tests passed')

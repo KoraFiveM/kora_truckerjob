@@ -539,8 +539,8 @@ Kora.callback.register('qbtruckerjob:server:vehicleReturned', function(source, k
     if exists and NetworkGetNetworkIdFromEntity(entity) ~= netId then return false end
     -- Only the truck must be brought back; trailers are also released when a contract is abandoned or fails.
     if kind == 'truck' and not vehicleIsWrecked(entity) and not vehicleIsAtReturn(entity) then
-        Kora.notify.send(source, { title = 'Trucking', message = 'Bring the truck to the return point first.', type = 'error' })
-        return false, 'Bring the truck to the return point first.'
+        -- No notify here: the client shows this once per return-zone visit (Config.Return.awayMode).
+        return false, (Config.Return or {}).awayMessage or 'Bring the truck to the return point first.'
     end
     if exists then deleteEntity(entity) end
     state[kind] = nil

@@ -16,7 +16,12 @@ Config = {
 
     Return = {
         requireVehicleInZone = true, -- The job truck itself must be at the return point before it counts as returned (false = old behaviour: only the player must be in the zone)
-        maxDistance = 15.0, -- Metres from Config.Coords.TruckReturn the truck may be, checked server-side (the client zone radius is 10.0)
+        maxDistance = 15.0, -- Metres from Config.Coords.TruckReturn the truck may be, checked server-side (keep it above zoneRadius)
+        zoneRadius = 10.0, -- Metres around Config.Coords.TruckReturn in which the return prompts show
+        exitPrompt = 'Exit the vehicle to return the truck', -- Text UI shown only while driving the job truck inside the return zone
+        awayMessage = 'Bring the truck to the return point first.', -- Shown when the player is in the return zone without the truck
+        awayMode = 'textui', -- How awayMessage is shown: 'textui' = stays up while in the zone, 'notify' = one notification per zone entry, false = not shown
+        returnedMessage = 'Truck returned to the depot.', -- Notification once the truck has been returned
     },
 
     TrailerPickup = {

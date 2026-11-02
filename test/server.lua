@@ -137,8 +137,9 @@ local keyedTruck = assert(callbacks['qbtruckerjob:server:vehicleRequested'](6, '
 local returnPoint = vector3(Config.Coords.TruckReturn.x, Config.Coords.TruckReturn.y, Config.Coords.TruckReturn.z)
 playerCoords = returnPoint
 local notifiedBefore = #notifications
-local refused = callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck)
-assert(not refused and #notifications == notifiedBefore + 1 and #keyCalls.removed == 0, 'a far truck must not be returned, keys kept')
+local refused, refusal = callbacks['qbtruckerjob:server:vehicleReturned'](6, 'truck', keyedTruck)
+assert(not refused and #keyCalls.removed == 0, 'a far truck must not be returned, keys kept')
+assert(refusal == Config.Return.awayMessage and #notifications == notifiedBefore, 'refusal reason goes back to the client, which shows it once')
 assert(DoesEntityExist(NetworkGetEntityFromNetworkId(keyedTruck)), 'a refused return must keep the truck')
 local keyedEntity = NetworkGetEntityFromNetworkId(keyedTruck)
 entities[keyedEntity].coords = vector3(returnPoint.x + Config.Return.maxDistance + 5, returnPoint.y, returnPoint.z)
