@@ -27,7 +27,8 @@ Config = {
     TrailerPickup = {
         zoneRadius = 8.0, -- Metres around Config.Coords.TrailerLocator in which the dispatch prompt shows, on foot or in a truck (0 = disable the prompt, eye-target only)
         allowInVehicle = true, -- Show the prompt while sitting in a vehicle (false = on foot only)
-        key = 38, -- Control id pressed to dispatch (38 = E)
+        key = 38, -- Control id pressed to dispatch (38 = E). Only used when keybind is false/empty (legacy per-frame polling)
+        keybind = 'E', -- Rebindable key name (shown in Settings > Key Bindings) registered only while inside the zone, so no per-frame loop. false = poll Config.TrailerPickup.key instead
         prompt = 'Press E to dispatch your assigned trailer', -- Prompt text
         targetRadius = 0.75, -- Radius of the kora_target eye zone at the locator (was hard-coded)
     },
@@ -36,7 +37,9 @@ Config = {
         showMarker = true, -- Draw the drop-zone marker at the delivery point (green = trailer parked correctly, red = not yet)
         textUI = true, -- Show on-screen guidance while inside the delivery area
         notifyOnArrival = true, -- Notify the driver when they reach the delivery area
-        detachKey = 74, -- Control id that detaches the trailer once it is parked in the marker (74 = H)
+        detachKey = 74, -- Control id that detaches the trailer once it is parked in the marker (74 = H). Only used when detachKeybind is false/empty (legacy per-frame polling)
+        detachKeybind = 'H', -- Rebindable key name registered only while the delivery bay is active. false = poll Config.Delivery.detachKey instead
+        checkInterval = 250, -- Milliseconds between parked/attached checks and prompt updates (the marker is still drawn every frame when showMarker is true)
         detachKeyLabel = 'H', -- Key name shown in the prompts
         approachText = 'Reverse the trailer into the marker', -- Shown until the trailer is lined up
         detachText = 'Press {key} to detach the trailer and deliver', -- Shown when parked but still hitched; {key} = detachKeyLabel

@@ -34,14 +34,17 @@ local TRUCK, TRAILER = 500, 501
 local deadEntityQueries, removedBlips, calls, notices, prompts, hidden, markers = 0, {}, {}, {}, {}, {}, 0
 local pedInside = false
 local controlReleased = false
+local binds = {}
 local detached
 
 function GetCurrentResourceName() return 'kora_truckerjob' end
 function GetResourceState() return 'missing' end
 function PlayerPedId() return 1 end
 function GetVehiclePedIsIn() return pedInside and TRUCK or 0 end
-local truckCoords = vector3(0, 0, 0)
-function GetEntityCoords(entity) return entity == TRUCK and truckCoords or vector3(0, 0, 0) end
+local truckCoords, trailerCoords = vector3(0, 0, 0), vector3(0, 0, 0)
+function GetEntityCoords(entity)
+    return entity == TRUCK and truckCoords or entity == TRAILER and trailerCoords or vector3(0, 0, 0)
+end
 function GetEntityHeading() return 90.0 end
 function IsAnyVehicleNearPoint() return false end
 function DoesEntityExist(entity)
@@ -91,6 +94,12 @@ Kora = {
             table.insert(cacheHandlers[key], handler)
         end,
     },
+    keybind = { add = function(opts)
+        local bind = { opts = opts }
+        bind.remove = function() if binds[opts.name] == bind then binds[opts.name] = nil end end
+        binds[opts.name] = bind
+        return bind
+    end },
     notify = { send = function(payload) notices[#notices + 1] = payload.message end },
     textui = {
         show = function(text) nextPrompt = nextPrompt + 1; prompts[#prompts + 1] = text; return nextPrompt end,
@@ -149,9 +158,11 @@ local trailerZone
 for _, zone in ipairs(zones) do if zone.opts.radius == Config.TrailerPickup.zoneRadius then trailerZone = zone end end
 assert(trailerZone, 'trailer pickup zone exists')
 trailerZone.opts.onEnter()
-controlReleased = true
+assert(binds.kora_truckerjob_dispatch, 'dispatch key is a keybind registered on zone enter, not a polling loop')
+CreateThread(function() binds.kora_truckerjob_dispatch.opts.onReleased() end)
 tick(); tick()
-controlReleased = false
+assert(count(calls, 'qbtruckerjob:server:vehicleRequested') == 2, 'releasing the key dispatches the trailer')
+assert(not binds.kora_truckerjob_dispatch, 'dispatch keybind removed once the trailer is dispatched')
 for _, zone in ipairs(zones) do if zone.opts.radius == 75.0 then dropZone = zone end end
 assert(dropZone, 'drop-off zone created after dispatch')
 dropZone.opts.onEnter()
@@ -249,4 +260,35 @@ assert(notices[#notices] == Config.Return.returnedMessage, 'player told the truc
 setCache('vehicle', 777); setCache('vehicle', false)
 tick()
 assert(returnCalls() == returnsAtEntry + 1, 'no further return attempts after the truck is gone')
+
+-- Delivery bay: the detach key is a keybind, state is polled at checkInterval, completion fires once detached.
+local function lastZone(radius)
+    for index = #zones, 1, -1 do if zones[index].opts.radius == radius then return zones[index] end end
+end
+truckAlive, trailerAlive = true, true
+holdApp = true
+exported.openDispatch(); tick(); tick()
+CreateThread(function() assert(Kora.app.onAction('trucker:accept', { itemId = 'J1' }).close) end)
+tick(); tick()
+holdApp = false
+Config.Delivery.textUI, Config.Delivery.showMarker, Config.Delivery.notifyOnArrival = true, true, false
+local pickup = lastZone(Config.TrailerPickup.zoneRadius)
+pickup.opts.onEnter()
+CreateThread(function() binds.kora_truckerjob_dispatch.opts.onReleased() end)
+tick(); tick()
+local bay = lastZone(75.0)
+bay.opts.onEnter()
+assert(binds.kora_truckerjob_detach, 'detach key registered while the bay is active')
+local completedBefore = count(calls, 'qbtruckerjob:server:jobCompleted')
+trailerCoords = vector3(10, 10, 4) -- lined up in the marker, still hitched
+local markersBefore = markers
+tick(0); tick(0)
+assert(prompts[#prompts] == 'Press H to detach the trailer and deliver', 'detach guidance shown: ' .. tostring(prompts[#prompts]))
+binds.kora_truckerjob_detach.opts.onReleased()
+assert(detached, 'detach key detaches the trailer when parked')
+tick(300); tick(300)
+assert(count(calls, 'qbtruckerjob:server:jobCompleted') == completedBefore + 1, 'job completes once the trailer is detached')
+assert(not binds.kora_truckerjob_detach, 'detach keybind removed when the watch ends')
+assert(markers > markersBefore, 'marker still drawn')
+
 print('qbtruckerjob client tests passed')

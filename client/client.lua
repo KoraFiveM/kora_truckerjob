@@ -9,6 +9,8 @@ local currentTrailer
 local trailerTarget
 local trailerZone
 local trailerPrompt
+local trailerKeybind
+local deliveryWatch = 0
 local dropOffZone
 local truckReturnZone
 local isInDropoffZone = false
@@ -56,6 +58,7 @@ end
 
 local function clearTrailerPrompt()
     if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+    if trailerKeybind then trailerKeybind.remove(); trailerKeybind = nil end
 end
 
 local function clearTrailerTarget()
@@ -264,45 +267,81 @@ local function finishJob(successful)
     return true
 end
 
+-- Marker drawing is the only thing that still needs a frame loop; parked/attached state, prompts and
+-- completion are re-evaluated every Config.Delivery.checkInterval. With a detach keybind and no marker
+-- the loop sleeps for the whole interval.
 local function watchDelivery(job)
     local coords = vector3(job.coords.x, job.coords.y, job.coords.z - 1.0)
     local settings = Config.Delivery or {}
     local key = settings.detachKey or 74
     local keyLabel = settings.detachKeyLabel or 'H'
+    local interval = settings.checkInterval or 250
+    local keybindKey = settings.detachKeybind
+    local showMarker = settings.showMarker ~= false
+    deliveryWatch = deliveryWatch + 1
+    local watchId = deliveryWatch
+
+    local function trailerAttached()
+        return currentTrailer and DoesEntityExist(currentTrailer) and IsEntityAttached(currentTrailer)
+    end
+
+    local function detachTrailer()
+        if currentTruck and DoesEntityExist(currentTruck) then DetachVehicleFromTrailer(currentTruck) end
+    end
+
+    local bind
+    if type(keybindKey) == 'string' and keybindKey ~= '' then
+        bind = Kora.keybind.add({
+            name = 'kora_truckerjob_detach',
+            description = 'Trucking: detach the trailer at the delivery bay',
+            defaultKey = keybindKey,
+            onReleased = function()
+                if watchId == deliveryWatch and trailerIsParked(coords, job.coords.w, currentTrailer) and trailerAttached() then
+                    detachTrailer()
+                end
+            end,
+        })
+    end
+    local frameWait = (showMarker or not bind) and 0 or interval
+
     CreateThread(function()
-        while isInDropoffZone and currentJob and currentJob.id == job.id do
-            local parked = trailerIsParked(coords, job.coords.w, currentTrailer)
-            if settings.showMarker ~= false then
+        local parked, attached, nextCheck = false, false, 0
+        while watchId == deliveryWatch and isInDropoffZone and currentJob and currentJob.id == job.id do
+            if GetGameTimer() >= nextCheck then
+                nextCheck = GetGameTimer() + interval
+                parked = trailerIsParked(coords, job.coords.w, currentTrailer)
+                attached = trailerAttached()
+                if settings.textUI ~= false then
+                    if parked and attached then
+                        local text = (settings.detachText or 'Press {key} to detach the trailer and deliver'):gsub('{key}', keyLabel)
+                        setDeliveryPrompt('detach', text)
+                    elseif not parked then
+                        setDeliveryPrompt('approach', settings.approachText or 'Reverse the trailer into the marker')
+                    else
+                        clearDeliveryPrompt()
+                    end
+                end
+                if parked and not attached then
+                    clearDeliveryPrompt()
+                    local completed, err = finishJob(true)
+                    if completed then break end
+                    notify(err, 'error')
+                    Wait(1000)
+                end
+            end
+            if showMarker then
                 local colour = parked and { r = 0, g = 185, b = 0 } or { r = 255, g = 0, b = 0 }
                 DrawMarker(30, coords, 0.0, 0.0, 1.0, 0.0,
                     job.coords.w > 180 and 540 - job.coords.w or 180 - job.coords.w,
                     0.0, 3.0, 3.0, 5.0, colour.r, colour.g, colour.b, 185,
                     false, false, 2, false, nil, nil, false)
             end
-            local attached = currentTrailer and DoesEntityExist(currentTrailer) and IsEntityAttached(currentTrailer)
-            if settings.textUI ~= false then
-                if parked and attached then
-                    local text = (settings.detachText or 'Press {key} to detach the trailer and deliver'):gsub('{key}', keyLabel)
-                    setDeliveryPrompt('detach', text)
-                elseif not parked then
-                    setDeliveryPrompt('approach', settings.approachText or 'Reverse the trailer into the marker')
-                else
-                    clearDeliveryPrompt()
-                end
-            end
-            if parked and attached and IsControlJustReleased(0, key) and currentTruck and DoesEntityExist(currentTruck) then
-                DetachVehicleFromTrailer(currentTruck)
-            end
-            if parked and not attached then
-                clearDeliveryPrompt()
-                local completed, err = finishJob(true)
-                if completed then return end
-                notify(err, 'error')
-                Wait(1000)
-            end
-            Wait(0)
+            if not bind and parked and attached and IsControlJustReleased(0, key) then detachTrailer() end
+            Wait(frameWait)
         end
-        clearDeliveryPrompt()
+        if bind then bind.remove() end
+        -- A newer watch (zone re-entered quickly) owns the prompt now.
+        if watchId == deliveryWatch then clearDeliveryPrompt() end
     end)
 end
 
@@ -362,6 +401,17 @@ local function createTrailerZone()
     local settings = Config.TrailerPickup or {}
     if settings.zoneRadius == 0 then return end
     local key = settings.key or 38
+    local keybindKey = settings.keybind
+    local dispatching = false
+
+    local function tryDispatch()
+        if dispatching then return end
+        dispatching = true
+        local ok, err = pcall(dispatchTrailer)
+        dispatching = false
+        if not ok then error(err, 0) end
+    end
+
     trailerZone = Kora.zones.sphere({
         coords = Config.Coords.TrailerLocator,
         radius = settings.zoneRadius or 8.0,
@@ -372,10 +422,24 @@ local function createTrailerZone()
             trailerPrompt = Kora.textui.show(settings.prompt or 'Press E to dispatch your assigned trailer', {
                 icon = 'Truck', position = 'right-center',
             })
+            if type(keybindKey) == 'string' and keybindKey ~= '' then
+                -- Registered only while inside the zone, so no frame loop is needed to read the key.
+                trailerKeybind = Kora.keybind.add({
+                    name = 'kora_truckerjob_dispatch',
+                    description = 'Trucking: dispatch your assigned trailer',
+                    defaultKey = keybindKey,
+                    onReleased = function()
+                        if not trailerPrompt then return end
+                        tryDispatch()
+                        if currentTrailer then clearTrailerPrompt() end
+                    end,
+                })
+                return
+            end
             CreateThread(function()
                 while trailerPrompt and trailerZone and trailerZone.isInside() do
                     if IsControlJustReleased(0, key) then
-                        dispatchTrailer()
+                        tryDispatch()
                         if currentTrailer then break end
                     end
                     Wait(0)
