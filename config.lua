@@ -52,6 +52,12 @@ Config = {
         message = 'Your truck is gone. The contract has been closed.', -- No deposit exists, so no penalty; Config.CooldownOnAbandon still applies if enabled
     },
 
+    TrailerLost = {
+        enabled = true, -- Detect a job trailer that was destroyed/deleted and close the contract as failed
+        checkInterval = 1000, -- Milliseconds between trailer checks
+        message = 'Your trailer was destroyed. The contract has been closed.', -- Config.CooldownOnAbandon still applies if enabled
+    },
+
     TimedChanceGenerator = 15, -- The chance for a time-based job to be generated (15%)
 
     XPReward = 75, -- XP reward for completing a job

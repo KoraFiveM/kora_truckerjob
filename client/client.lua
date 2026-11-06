@@ -371,6 +371,22 @@ local function createDropoffZone(job)
     })
 end
 
+-- The event handler at the bottom only catches CEventNetworkVehicleUndrivable; a trailer that exploded or was deleted
+-- without that event firing would leave the contract open forever, so poll for it like the truck.
+local function watchTrailer(trailer)
+    local settings = Config.TrailerLost or {}
+    if settings.enabled == false then return end
+    CreateThread(function()
+        while currentTrailer == trailer and currentJob do
+            if not DoesEntityExist(trailer) or IsEntityDead(trailer) then
+                notify(settings.message or 'Your trailer was destroyed.', 'error')
+                if finishJob(false) then return end
+            end
+            Wait(settings.checkInterval or 1000)
+        end
+    end)
+end
+
 local function dispatchTrailer()
     if not currentJob or currentTrailer then return end
     local spawnId = findSpawnPoint('trailer')
@@ -395,6 +411,7 @@ local function dispatchTrailer()
     trailerBlip = AddBlipForEntity(currentTrailer)
     SetBlipSprite(trailerBlip, 479)
     createDropoffZone(currentJob)
+    watchTrailer(currentTrailer)
 end
 
 local function createTrailerZone()
