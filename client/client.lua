@@ -180,7 +180,7 @@ end
 -- message is shown once per state instead of being re-sent while the player stands in the zone.
 local function refreshTruckReturn()
     if returnPending then return end
-    if not truckReturnZone or not inReturnZone or not currentTruck or currentTrailer then return clearPrompt() end
+    if not truckReturnZone or not inReturnZone or not currentTruck or (currentTrailer and currentJob) then return clearPrompt() end
 
     local settings = Config.Return or {}
     if Kora.cache.vehicle() == currentTruck then
@@ -230,8 +230,14 @@ Kora.cache.onChange('seat', function()
     if truckReturnZone and currentTruck and Kora.cache.vehicle() == currentTruck then refreshTruckReturn() end
 end)
 
-Kora.cache.onChange('vehicle', function()
-    if truckReturnZone then refreshTruckReturn() end
+Kora.cache.onChange('vehicle', function(vehicle, previous)
+    if not truckReturnZone then return end
+    refreshTruckReturn()
+    -- Leaving the job truck outside the return zone shows no zone prompt, so explain where to take it.
+    local settings = Config.Return or {}
+    if settings.outsideHint == false or inReturnZone or returnPending then return end
+    if not currentTruck or previous ~= currentTruck or vehicle == currentTruck then return end
+    notify(settings.outsideMessage or 'Return the truck to the depot return point.', 'info')
 end)
 
 local function finishJob(successful)
@@ -367,6 +373,7 @@ local function createDropoffZone(job)
             releaseTrailer()
             clearDropoffZone()
             startTruckReturn()
+            if truckReturnZone and inReturnZone then refreshTruckReturn() end
         end,
     })
 end
