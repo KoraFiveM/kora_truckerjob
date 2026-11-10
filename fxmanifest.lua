@@ -1,8 +1,6 @@
 fx_version 'cerulean'
 game 'gta5'
 lua54 'yes'
--- Keep the legacy resource name resolvable for exports['qbtruckerjob'] callers.
-provide 'qbtruckerjob'
 author 'qwerty1Verified'
 description 'Trucking job to haul cargo for money with an integrated skill system'
 version '1.1.0'
@@ -21,7 +19,11 @@ shared_scripts {
     'config.lua',
 }
 
-client_script 'client/client.lua'
+client_scripts {
+    'client/client.lua',
+    -- Optional FFT hooks: returns immediately unless fft_kora_hooks is true.
+    'fft_hooks.lua'
+}
 
 server_script 'server.lua'
 

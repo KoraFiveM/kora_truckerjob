@@ -19,7 +19,7 @@ Feature: kora_truckerjob — Jobs
     When I manually: go to the freight depot job station near the docks
     And I manually: target the job station sphere
     And I select the "Open freight dispatch" target option
-    Then the "qbtruckerjob:dispatch" app opens
+    Then the "kora_truckerjob:dispatch" app opens
 
   @kora_truckerjob @checklist @checklist:kora_truckerjob:contracts-tab @cat:jobs
   Scenario: Contracts tab: list and accept contract
@@ -27,7 +27,7 @@ Feature: kora_truckerjob — Jobs
     Checklist test: Contracts tab lists generated jobs (cargo, distance, est. pay, cargo level); 'Accept contract' disabled if skills do not qualify.
     """
     When I manually: open the freight dispatch app and go to the Contracts tab
-    Then the "qbtruckerjob:dispatch" app should be open
+    Then the "kora_truckerjob:dispatch" app should be open
     And I confirm: the Contracts tab lists generated jobs with cargo, distance, estimated pay and cargo level
     And I confirm: 'Accept contract' is disabled for contracts my skills do not qualify for
 
@@ -110,7 +110,7 @@ Feature: kora_truckerjob — Jobs
     Checklist test: Skills tab shows XP/skill points; upgrade Distance, Cargo, Expedited (max level 4) to unlock longer, fragile and timed jobs.
     """
     When I manually: open the freight dispatch app and go to the Skills tab
-    Then the "qbtruckerjob:dispatch" app should be open
+    Then the "kora_truckerjob:dispatch" app should be open
     And I confirm: the Skills tab shows XP and skill points
     When I manually: upgrade Distance, Cargo and Expedited skills up to level 4
     Then I confirm: longer, fragile and timed jobs unlock as skills are upgraded
@@ -132,7 +132,7 @@ Feature: kora_truckerjob — Jobs
     Checklist test: Trucks tab: Hauler free, Phantom 25k, Packer 50k, Phantom Custom 100k; Purchase then 'Use this truck'; shows top speed and price.
     """
     When I manually: open the freight dispatch app and go to the Trucks tab
-    Then the "qbtruckerjob:dispatch" app should be open
+    Then the "kora_truckerjob:dispatch" app should be open
     And I confirm: Hauler is free, Phantom costs 25000, Packer costs 50000 and Phantom Custom costs 100000
     And I confirm: each truck shows its top speed and price
     When I manually: purchase a truck and press 'Use this truck'

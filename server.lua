@@ -328,7 +328,7 @@ CreateThread(function()
     end
 end)
 
-Kora.callback.register('qbtruckerjob:server:dashboardRequested', function(source)
+Kora.callback.register('kora_truckerjob:server:dashboardRequested', function(source)
     if not exports.kora_core:getPlayer(source) then return nil, 'Your character is not available.' end
     local _, trucker = normaliseTruckerRep(source)
     ensureQualifyingJob(trucker.skills)
@@ -336,7 +336,7 @@ Kora.callback.register('qbtruckerjob:server:dashboardRequested', function(source
     return { jobs = availableJobs, activeJobId = activeJobId, rep = trucker }
 end, { rateLimit = { max = 5, window = 5000 } })
 
-Kora.callback.register('qbtruckerjob:server:jobAccepted', function(source, jobId)
+Kora.callback.register('kora_truckerjob:server:jobAccepted', function(source, jobId)
     if type(jobId) ~= 'string' then return false, 'Invalid job.' end
     if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
 
@@ -366,7 +366,7 @@ Kora.callback.register('qbtruckerjob:server:jobAccepted', function(source, jobId
     return true, clientJob(jobId, job)
 end, { rateLimit = { max = 3, window = 5000 } })
 
-Kora.callback.register('qbtruckerjob:server:vehicleRequested', function(source, kind, jobId, spawnId)
+Kora.callback.register('kora_truckerjob:server:vehicleRequested', function(source, kind, jobId, spawnId)
     if kind ~= 'truck' and kind ~= 'trailer' then return nil, 'Invalid vehicle type.' end
     if type(jobId) ~= 'string' or not isInteger(spawnId) then return nil, 'Invalid vehicle request.' end
 
@@ -407,7 +407,7 @@ Kora.callback.register('qbtruckerjob:server:vehicleRequested', function(source, 
     return netId
 end, { rateLimit = { max = 4, window = 10000 } })
 
-Kora.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobId, successful, trailerNetId)
+Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, jobId, successful, trailerNetId)
     if type(jobId) ~= 'string' or type(successful) ~= 'boolean' then return false, 'Invalid completion request.' end
     local job = jobs[jobId]
     if not job or job.active ~= source then return false, 'This job is not active.' end
@@ -455,7 +455,7 @@ Kora.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobI
     trucker.skillPoints = trucker.skillPoints + skillPointsGained
     local saved, saveError = setTruckerRep(source, rep, trucker)
     if not saved then
-        print(('^1[qbtruckerjob]^7 Paid player %d but could not save trucking XP: %s'):format(source, saveError or 'unknown error'))
+        print(('^1[kora_truckerjob]^7 Paid player %d but could not save trucking XP: %s'):format(source, saveError or 'unknown error'))
     end
 
     jobs[jobId] = nil
@@ -470,7 +470,7 @@ Kora.callback.register('qbtruckerjob:server:jobCompleted', function(source, jobI
     }
 end, { rateLimit = { max = 3, window = 10000 } })
 
-Kora.callback.register('qbtruckerjob:server:skillUpgraded', function(source, skill)
+Kora.callback.register('kora_truckerjob:server:skillUpgraded', function(source, skill)
     if skill ~= 'distance' and skill ~= 'cargo' and skill ~= 'time' then return false, 'Invalid skill.' end
     local rep, trucker = normaliseTruckerRep(source)
     if trucker.skillPoints < 1 then return false, 'You do not have enough skill points.' end
@@ -483,7 +483,7 @@ Kora.callback.register('qbtruckerjob:server:skillUpgraded', function(source, ski
     return true, trucker
 end, { rateLimit = { max = 4, window = 5000 } })
 
-Kora.callback.register('qbtruckerjob:server:truckPurchased', function(source, spawnName)
+Kora.callback.register('kora_truckerjob:server:truckPurchased', function(source, spawnName)
     local truck = truckDefinition(spawnName)
     if not truck or truck.price <= 0 then return false, 'That truck is not for sale.' end
     if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
@@ -502,7 +502,7 @@ Kora.callback.register('qbtruckerjob:server:truckPurchased', function(source, sp
     return true, trucker
 end, { rateLimit = { max = 2, window = 5000 } })
 
-Kora.callback.register('qbtruckerjob:server:truckSelected', function(source, spawnName)
+Kora.callback.register('kora_truckerjob:server:truckSelected', function(source, spawnName)
     local truck = truckDefinition(spawnName)
     if not truck then return false, 'That truck is unavailable.' end
     if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
@@ -529,7 +529,7 @@ local function vehicleIsAtReturn(entity)
         <= (settings.maxDistance or 15.0)
 end
 
-Kora.callback.register('qbtruckerjob:server:vehicleReturned', function(source, kind, netId)
+Kora.callback.register('kora_truckerjob:server:vehicleReturned', function(source, kind, netId)
     if kind ~= 'truck' and kind ~= 'trailer' then return false end
     if not isInteger(netId) or netId <= 0 then return false end
     local state = spawnedVehicles[source]

@@ -1,4 +1,4 @@
-# qbtruckerjob
+# kora_truckerjob
 
 A server-authoritative freight job for the qbcore2 stack. Players accept generated contracts, collect a depot truck and assigned trailer, deliver cargo, earn XP, upgrade skills, and build a personal truck fleet.
 
@@ -9,9 +9,9 @@ A server-authoritative freight job for the qbcore2 stack. Players accept generat
 - Penalties for late deliveries and damaged cargo.
 - Shared kora_lib AppShell for contracts, skills, and the truck fleet.
 - kora_lib notifications, text prompts, callbacks, and zones.
-- Modern qbcore metadata, money, and shared-vehicle APIs.
+- Modern kora_core metadata, money, and shared-vehicle APIs.
 - Server-owned job vehicles and server-verified delivery payouts.
-- Truck return system with qbvehiclekeys integration.
+- Truck return system with kora_vehiclekeys integration.
 - Configurable job settings.
 
 ## Installation
@@ -19,12 +19,12 @@ A server-authoritative freight job for the qbcore2 stack. Players accept generat
 Start these resources first, in order:
 
 ```cfg
-ensure qbtheme
+ensure kora_theme
 ensure kora_lib
-ensure qbcore
-ensure qbtarget
-ensure qbvehiclekeys
-ensure qbtruckerjob
+ensure kora_core
+ensure kora_target
+ensure kora_vehiclekeys
+ensure kora_truckerjob
 ```
 
 The configured fuel resource is optional. When it is running, newly dispatched trucks receive a randomized starting fuel level.
