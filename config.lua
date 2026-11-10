@@ -32,7 +32,10 @@ Config = {
         key = 38, -- Control id pressed to dispatch (38 = E). Only used when keybind is false/empty (legacy per-frame polling)
         keybind = 'E', -- Rebindable key name (shown in Settings > Key Bindings) registered only while inside the zone, so no per-frame loop. false = poll Config.TrailerPickup.key instead
         prompt = 'Press E to dispatch your assigned trailer', -- Prompt text
-        targetRadius = 0.75, -- Radius of the kora_target eye zone at the locator (was hard-coded)
+        -- Radius of the kora_target eye zone at the locator (was hard-coded 0.75). kora_target
+        -- matches the point the camera ray hits; TrailerLocator is ~1.1 m above the quay, so a
+        -- 0.75 m sphere held no surface to aim at. 1.25 reaches the ground under the locator.
+        targetRadius = 1.25,
     },
 
     Delivery = {
