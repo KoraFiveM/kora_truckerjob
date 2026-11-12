@@ -1,6 +1,6 @@
 ---
 title: Skills and progression
-sidebar_position: 5
+sidebar_position: 7
 ---
 
 # Skills and progression

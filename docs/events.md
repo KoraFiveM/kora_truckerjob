@@ -1,6 +1,6 @@
 ---
 title: Events and callbacks
-sidebar_position: 8
+sidebar_position: 10
 ---
 
 # Events and callbacks

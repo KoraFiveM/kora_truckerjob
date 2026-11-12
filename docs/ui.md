@@ -1,13 +1,13 @@
 ---
 title: Freight Dispatch app
-sidebar_position: 7
+sidebar_position: 9
 ---
 
 # Freight Dispatch app
 
 ## Opening
 
-Use the `kora_target` option **Open freight dispatch** on the sphere at `Config.Coords.JobStation` (radius 0.75, distance 2.5). The client also exposes the `openDispatch` export (see [Exports](./exports.md)). The zone is re-registered when `kora_target` starts. The app id is `kora_truckerjob:dispatch`; its title is "Freight Dispatch".
+Use the `kora_target` option **Open freight dispatch** on the sphere at `Config.Coords.JobStation` (radius 0.75, distance 2.5). The client also exposes the `openDispatch` export (see [Exports](./api/exports.md)). The zone is re-registered when `kora_target` starts. The app id is `kora_truckerjob:dispatch`; its title is "Freight Dispatch".
 
 The app data is loaded from the server when opened (rate limited to 5 requests per 5 seconds). If it cannot be loaded, a notification is shown.
 
