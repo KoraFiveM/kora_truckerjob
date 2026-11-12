@@ -1,3 +1,12 @@
+> [!WARNING]
+> **Kora Framework is in alpha and actively being developed.**
+>
+> This resource is a work in progress. Features may be incomplete or unstable,
+> and APIs, configuration, and behavior may change. It is not ready for production use.
+>
+> **Help shape Kora:** try it out, share feedback, report bugs through this
+> repository’s Issues, and contribute improvements through pull requests.
+
 # kora_truckerjob
 
 A server-authoritative freight job for the qbcore2 stack. Players accept generated contracts, collect a depot truck and assigned trailer, deliver cargo, earn XP, upgrade skills, and build a personal truck fleet.
