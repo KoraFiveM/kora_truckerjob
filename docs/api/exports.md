@@ -1,21 +1,58 @@
 ---
-title: Exports
-sidebar_position: 9
+title: "Client export"
+sidebar_position: 2
 ---
 
-# Exports
 
-## Provided
+# Client export
 
-| Export | Side | Description |
-| --- | --- | --- |
-| `openDispatch` | client | Opens the Freight Dispatch app, the same function the job station target runs. Does nothing if it is already opening. Takes no arguments and does not check distance. Example below |
+One convenience export to open the dispatch panel from another client resource (for example a different NPC or menu entry point).
+
+Namespace: `exports.kora_truckerjob` · Source: `client/client.lua`
+
+## How it works
+
+Internally identical to selecting the depot's kora_target option.
+
+## Functions
+
+One export.
+
+### `exports.kora_truckerjob:openDispatch()`
+
+Opens the freight dispatch AppShell panel — the same action as targeting the depot NPC/zone.
+
+**Parameters**
+
+
+
+**Returns**
+
+- **No return value.**
+
+**Example**
 
 ```lua
 exports.kora_truckerjob:openDispatch()
 ```
 
-### FFT test hooks
+**Representative console output**
+
+```text
+A no-op if the panel is already open or the dashboard request fails (shows an error notification instead).
+```
+
+## Limits and related APIs
+
+Client only. Does not bypass any of the server-side checks in the callbacks above.
+
+The server callbacks are listed in [Events and callbacks](../events.md).
+
+## Behaviour notes
+
+`openDispatch` takes no arguments and does not check distance to the depot. It does nothing if the app is already opening.
+
+## FFT test hooks
 
 `fft_hooks.lua` (client) is inert unless the convar `fft_kora_hooks` is `true`, for example `setr fft_kora_hooks true`. When enabled it adds:
 
