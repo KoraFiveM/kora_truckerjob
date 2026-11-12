@@ -1,0 +1,44 @@
+{
+  "resource": "kora_truckerjob",
+  "standardsRevision": "2026-11-12.1",
+  "realms": {
+    "client": [
+      "client/client.lua",
+      "fft_hooks.lua"
+    ],
+    "server": [
+      "server.lua"
+    ],
+    "shared": [
+      "config.lua"
+    ],
+    "manifest": [
+      "fxmanifest.lua"
+    ],
+    "test": [
+      "test/client.lua",
+      "test/server.lua"
+    ]
+  },
+  "exclude": [
+    ".git/*",
+    ".github/*",
+    ".standards/*",
+    "node_modules/*",
+    "**/node_modules/*",
+    "vendor/*",
+    "**/vendor/*",
+    "web/*",
+    "ui/*",
+    "html/*",
+    "dist/*",
+    "artifacts/*",
+    "runtime/*",
+    "txData/*",
+    "storage/*",
+    "stream/*",
+    "docs/*",
+    "__pycache__/*",
+    "modules/lookup/data/*"
+  ]
+}
