@@ -3,7 +3,7 @@ game 'gta5'
 lua54 'yes'
 author 'qwerty1Verified'
 description 'Trucking job to haul cargo for money with an integrated skill system'
-version '0.1.0'
+version '0.2.0'
 
 dependencies {
     'kora_lib',
