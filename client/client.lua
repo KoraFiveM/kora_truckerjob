@@ -24,7 +24,7 @@ local returnPrompt
 local jobStationTarget
 
 local function notify(message, type_)
-    Kora.notify.send({ title = 'Trucking', message = message, type = type_ or 'info' })
+    Kora.notify.send({ title = Kora.lang('Title.trucking'), message = message, type = type_ or 'info' })
 end
 
 local function money(value)
@@ -32,7 +32,7 @@ local function money(value)
 end
 
 local function distanceLabel(metres)
-    return ('%.1f km'):format((tonumber(metres) or 0) / 1000)
+    return Kora.lang('Format.distance_km', (tonumber(metres) or 0) / 1000)
 end
 
 local function removeBlip(blip)
@@ -143,7 +143,7 @@ end
 
 local function showTruckAway(message)
     local settings = Config.Return or {}
-    local text = message or settings.awayMessage or 'Bring the truck to the return point first.'
+    local text = message or settings.awayMessage or Kora.lang('Error.truck_return_required')
     if settings.awayMode == 'notify' then
         clearPrompt()
         if not awayNotified then
@@ -169,7 +169,7 @@ local function attemptTruckReturn()
                 currentTruckNetId = nil
             end
             clearTruckReturn()
-            notify((Config.Return or {}).returnedMessage or 'Truck returned to the depot.', 'success')
+            notify((Config.Return or {}).returnedMessage or Kora.lang('Notify.truck_returned'), 'success')
         elseif inReturnZone then
             showTruckAway(err)
         end
@@ -185,7 +185,7 @@ local function refreshTruckReturn()
     local settings = Config.Return or {}
     if Kora.cache.vehicle() == currentTruck then
         if Kora.cache.seat() == -1 then
-            setReturnPrompt('exit', settings.exitPrompt or 'Exit the vehicle to return the truck')
+            setReturnPrompt('exit', settings.exitPrompt or Kora.lang('Prompt.exit_to_return'))
         else
             clearPrompt()
         end
@@ -205,7 +205,7 @@ local function startTruckReturn()
     SetBlipScale(truckReturnBlip, 0.8)
     SetBlipAsShortRange(truckReturnBlip, false)
     BeginTextCommandSetBlipName('STRING')
-    AddTextComponentSubstringPlayerName('Truck Return')
+    AddTextComponentSubstringPlayerName(Kora.lang('Title.truck_return'))
     EndTextCommandSetBlipName(truckReturnBlip)
 
     truckReturnZone = Kora.zones.sphere({
@@ -237,15 +237,15 @@ Kora.cache.onChange('vehicle', function(vehicle, previous)
     local settings = Config.Return or {}
     if settings.outsideHint == false or inReturnZone or returnPending then return end
     if not currentTruck or previous ~= currentTruck or vehicle == currentTruck then return end
-    notify(settings.outsideMessage or 'Return the truck to the depot return point.', 'info')
+    notify(settings.outsideMessage or Kora.lang('Notify.return_truck_to_depot'), 'info')
 end)
 
 local function finishJob(successful)
-    if not currentJob then return false, 'You do not have an active job.' end
+    if not currentJob then return false, Kora.lang('Error.no_active_job') end
     local jobId = currentJob.id
     local trailerNetId = currentTrailer and DoesEntityExist(currentTrailer) and NetworkGetNetworkIdFromEntity(currentTrailer) or nil
     local completed, result = Kora.callback.trigger('kora_truckerjob:server:jobCompleted', jobId, successful, trailerNetId)
-    if not completed then return false, result or 'The job could not be completed.' end
+    if not completed then return false, result or Kora.lang('Error.job_complete_failed') end
 
     removeBlip(routeBlip)
     routeBlip = nil
@@ -259,10 +259,10 @@ local function finishJob(successful)
     end
 
     if successful then
-        local details = { ('Paid %s and earned %d XP.'):format(money(result.payout), result.xp) }
-        if result.late then details[#details + 1] = 'A late-delivery penalty was applied.' end
-        if result.damaged then details[#details + 1] = 'A cargo-damage penalty was applied.' end
-        if result.skillPointsGained > 0 then details[#details + 1] = 'You gained a skill point.' end
+        local details = { Kora.lang('Notify.delivery_paid_xp', money(result.payout), result.xp) }
+        if result.late then details[#details + 1] = Kora.lang('Notify.late_penalty') end
+        if result.damaged then details[#details + 1] = Kora.lang('Notify.damage_penalty') end
+        if result.skillPointsGained > 0 then details[#details + 1] = Kora.lang('Notify.skill_point_gained') end
         notify(table.concat(details, '\n'), 'success')
     else
         releaseTrailer()
@@ -299,7 +299,7 @@ local function watchDelivery(job)
     if type(keybindKey) == 'string' and keybindKey ~= '' then
         bind = Kora.keybind.add({
             name = 'kora_truckerjob_detach',
-            description = 'Trucking: detach the trailer at the delivery bay',
+            description = Kora.lang('Keybind.detach_trailer'),
             defaultKey = keybindKey,
             onReleased = function()
                 if watchId == deliveryWatch and trailerIsParked(coords, job.coords.w, currentTrailer) and trailerAttached() then
@@ -319,10 +319,10 @@ local function watchDelivery(job)
                 attached = trailerAttached()
                 if settings.textUI ~= false then
                     if parked and attached then
-                        local text = (settings.detachText or 'Press {key} to detach the trailer and deliver'):gsub('{key}', keyLabel)
+                        local text = (settings.detachText or Kora.lang('Prompt.detach_trailer')):gsub('{key}', keyLabel)
                         setDeliveryPrompt('detach', text)
                     elseif not parked then
-                        setDeliveryPrompt('approach', settings.approachText or 'Reverse the trailer into the marker')
+                        setDeliveryPrompt('approach', settings.approachText or Kora.lang('Prompt.reverse_trailer'))
                     else
                         clearDeliveryPrompt()
                     end
@@ -361,7 +361,7 @@ local function createDropoffZone(job)
             isInDropoffZone = true
             local settings = Config.Delivery or {}
             if settings.notifyOnArrival ~= false then
-                local message = (settings.arrivalMessage or 'Back the trailer into the marked bay, then detach it with {key}.')
+            local message = (settings.arrivalMessage or Kora.lang('Prompt.arrival_instructions'))
                     :gsub('{key}', settings.detachKeyLabel or 'H')
                 notify(message, 'info')
             end
@@ -386,7 +386,7 @@ local function watchTrailer(trailer)
     CreateThread(function()
         while currentTrailer == trailer and currentJob do
             if not DoesEntityExist(trailer) or IsEntityDead(trailer) then
-                notify(settings.message or 'Your trailer was destroyed.', 'error')
+                notify(settings.message or Kora.lang('Error.trailer_destroyed'), 'error')
                 if finishJob(false) then return end
             end
             Wait(settings.checkInterval or 1000)
@@ -397,14 +397,14 @@ end
 local function dispatchTrailer()
     if not currentJob or currentTrailer then return end
     local spawnId = findSpawnPoint('trailer')
-    if not spawnId then return notify('There are no available trailer bays.', 'error') end
+    if not spawnId then return notify(Kora.lang('Error.no_trailer_bays'), 'error') end
 
     local netId, err = Kora.callback.trigger('kora_truckerjob:server:vehicleRequested', 'trailer', currentJob.id, spawnId)
-    if not netId then return notify(err or 'The trailer could not be dispatched.', 'error') end
+    if not netId then return notify(err or Kora.lang('Error.trailer_dispatch_failed'), 'error') end
     local trailer = networkEntity(netId)
     if not trailer then
         Kora.callback.trigger('kora_truckerjob:server:vehicleReturned', 'trailer', netId)
-        return notify('The trailer did not enter the network.', 'error')
+        return notify(Kora.lang('Error.trailer_network_failed'), 'error')
     end
 
     currentTrailer = trailer
@@ -412,7 +412,7 @@ local function dispatchTrailer()
     removeBlip(routeBlip)
     routeBlip = nil
     SetTrailerLegsLowered(currentTrailer)
-    notify(('Your trailer is in Bay K%d.'):format(spawnId), 'success')
+    notify(Kora.lang('Notify.trailer_in_bay', spawnId), 'success')
 
     setRoute(currentJob.coords)
     trailerBlip = AddBlipForEntity(currentTrailer)
@@ -443,14 +443,14 @@ local function createTrailerZone()
         onEnter = function()
             if trailerPrompt or currentTrailer then return end
             if settings.allowInVehicle == false and GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then return end
-            trailerPrompt = Kora.textui.show(settings.prompt or 'Press E to dispatch your assigned trailer', {
+            trailerPrompt = Kora.textui.show(settings.prompt or Kora.lang('Prompt.dispatch_trailer'), {
                 icon = 'Truck', position = 'right-center',
             })
             if type(keybindKey) == 'string' and keybindKey ~= '' then
                 -- Registered only while inside the zone, so no frame loop is needed to read the key.
                 trailerKeybind = Kora.keybind.add({
                     name = 'kora_truckerjob_dispatch',
-                    description = 'Trucking: dispatch your assigned trailer',
+                    description = Kora.lang('Keybind.dispatch_trailer'),
                     defaultKey = keybindKey,
                     onReleased = function()
                         if not trailerPrompt then return end
@@ -488,7 +488,7 @@ local function createTrailerTarget()
         debug = Config.Debug,
         options = {
             {
-                label = 'Dispatch assigned trailer',
+                label = Kora.lang('Target.dispatch_trailer'),
                 icon = 'Truck',
                 onSelect = dispatchTrailer,
             },
@@ -504,7 +504,7 @@ local function handleTruckLost()
     clearTruckReturn()
     if netId then Kora.callback.trigger('kora_truckerjob:server:vehicleReturned', 'truck', netId) end
     local settings = Config.TruckLost or {}
-    notify(settings.message or 'Your truck is gone. The contract has been closed.', 'error')
+    notify(settings.message or Kora.lang('Error.truck_lost'), 'error')
     if currentJob then finishJob(false) end
     removeBlip(routeBlip)
     routeBlip = nil
@@ -526,13 +526,13 @@ end
 
 local function spawnTruck(jobId)
     local spawnId = findSpawnPoint('truck')
-    if not spawnId then return false, 'There are no available truck bays.' end
+    if not spawnId then return false, Kora.lang('Error.no_truck_bays') end
     local netId, err = Kora.callback.trigger('kora_truckerjob:server:vehicleRequested', 'truck', jobId, spawnId)
-    if not netId then return false, err or 'The truck could not be dispatched.' end
+    if not netId then return false, err or Kora.lang('Error.truck_dispatch_failed') end
     local truck = networkEntity(netId)
     if not truck then
         Kora.callback.trigger('kora_truckerjob:server:vehicleReturned', 'truck', netId)
-        return false, 'The truck did not enter the network.'
+        return false, Kora.lang('Error.truck_network_failed')
     end
 
     currentTruck = truck
@@ -545,9 +545,9 @@ local function spawnTruck(jobId)
 end
 
 local function acceptJob(jobId)
-    if currentJob then return false, 'You already have an active job.' end
+    if currentJob then return false, Kora.lang('Error.active_job_exists') end
     local accepted, job = Kora.callback.trigger('kora_truckerjob:server:jobAccepted', jobId)
-    if not accepted then return false, job or 'This job could not be accepted.' end
+    if not accepted then return false, job or Kora.lang('Error.job_accept_failed') end
 
     currentJob = job
     if dashboard then dashboard.activeJobId = job.id end
@@ -559,16 +559,16 @@ local function acceptJob(jobId)
             return false, spawnError
         end
     else
-        notify('Continue using your current truck.', 'info')
+        notify(Kora.lang('Notify.continue_current_truck'), 'info')
     end
     createTrailerTarget()
     return true
 end
 
 local skillDefinitions = {
-    distance = { label = 'Distance', icon = 'Route', description = 'Unlock longer delivery routes.' },
-    cargo = { label = 'Cargo', icon = 'Package', description = 'Unlock fragile and specialist loads.' },
-    time = { label = 'Expedited', icon = 'Clock', description = 'Unlock tighter delivery windows.' },
+    distance = { label = Kora.lang('Skill.distance'), icon = 'Route', description = Kora.lang('Skill.distance_description') },
+    cargo = { label = Kora.lang('Skill.cargo'), icon = 'Package', description = Kora.lang('Skill.cargo_description') },
+    time = { label = Kora.lang('Skill.expedited'), icon = 'Clock', description = Kora.lang('Skill.expedited_description') },
 }
 
 local function jobItems()
@@ -580,22 +580,22 @@ local function jobItems()
             and job.cargoLevel <= rep.skills.cargo
             and (not job.timeLevel or job.timeLevel <= rep.skills.time)
         local metadata = {
-            { label = 'Distance', value = distanceLabel(job.distance) },
-            { label = 'Estimated pay', value = money(job.distance * Config.PayPerMeter) },
-            { label = 'Cargo level', value = job.cargoLevel },
+            { label = Kora.lang('Menu.distance'), value = distanceLabel(job.distance) },
+            { label = Kora.lang('Menu.estimated_pay'), value = money(job.distance * Config.PayPerMeter) },
+            { label = Kora.lang('Menu.cargo_level'), value = job.cargoLevel },
         }
-        if job.timeLevel then metadata[#metadata + 1] = { label = 'Expedited level', value = job.timeLevel } end
+        if job.timeLevel then metadata[#metadata + 1] = { label = Kora.lang('Menu.expedited_level'), value = job.timeLevel } end
         result[#result + 1] = {
             id = job.id,
             label = job.cargo.label,
-            description = ('Contract %s · %s'):format(job.id, distanceLabel(job.distance)),
+            description = Kora.lang('Menu.contract_description', job.id, distanceLabel(job.distance)),
             image = ('nui://kora_truckerjob/html/images/cargo/%s'):format(job.image),
-            badge = job.active and (job.id == dashboard.activeJobId and 'Your active job' or 'Taken')
-                or eligible and 'Available' or 'Locked',
+            badge = job.active and (job.id == dashboard.activeJobId and Kora.lang('Menu.active_job') or Kora.lang('Menu.taken'))
+                or eligible and Kora.lang('Menu.available') or Kora.lang('Menu.locked'),
             tone = job.active and 'neutral' or eligible and 'success' or 'warning',
             metadata = metadata,
             actions = {
-                { id = 'trucker:accept', label = 'Accept contract', icon = 'Check', variant = 'primary', disabled = not eligible },
+                { id = 'trucker:accept', label = Kora.lang('Menu.accept_contract'), icon = 'Check', variant = 'primary', disabled = not eligible },
             },
         }
     end
@@ -612,10 +612,10 @@ local function skillItems()
             label = definition.label,
             description = definition.description,
             icon = definition.icon,
-            badge = ('Level %d / 4'):format(level),
-            metadata = { { label = 'Current level', value = level }, { label = 'Maximum', value = 4 } },
+            badge = Kora.lang('Menu.skill_level', level),
+            metadata = { { label = Kora.lang('Menu.current_level'), value = level }, { label = Kora.lang('Menu.maximum'), value = 4 } },
             actions = {
-                { id = 'trucker:upgrade', label = 'Spend one skill point', icon = 'ArrowUp', variant = 'primary',
+                { id = 'trucker:upgrade', label = Kora.lang('Menu.spend_skill_point'), icon = 'ArrowUp', variant = 'primary',
                     disabled = level >= 4 or dashboard.rep.skillPoints < 1 },
             },
         }
@@ -632,21 +632,21 @@ local function truckItems()
         local selected = dashboard.rep.activeTruck == truck.name
         local actions = {}
         if not owned then
-            actions[1] = { id = 'trucker:purchase', label = ('Purchase for %s'):format(money(truck.price)),
-                icon = 'ShoppingCart', variant = 'primary', confirm = ('Purchase %s with bank funds?'):format(label) }
+            actions[1] = { id = 'trucker:purchase', label = Kora.lang('Menu.purchase_for', money(truck.price)),
+                icon = 'ShoppingCart', variant = 'primary', confirm = Kora.lang('Menu.purchase_confirm', label) }
         elseif not selected then
-            actions[1] = { id = 'trucker:select', label = 'Use this truck', icon = 'Check', variant = 'primary' }
+            actions[1] = { id = 'trucker:select', label = Kora.lang('Menu.use_truck'), icon = 'Check', variant = 'primary' }
         end
         result[#result + 1] = {
             id = truck.name,
             label = label,
-            description = truck.price == 0 and 'Depot starter truck' or ('Purchase price: %s'):format(money(truck.price)),
+            description = truck.price == 0 and Kora.lang('Menu.starter_truck') or Kora.lang('Menu.purchase_price', money(truck.price)),
             image = ('nui://kora_truckerjob/html/images/trucks/%s.webp'):format(truck.name),
-            badge = selected and 'Selected' or owned and 'Owned' or 'For sale',
+            badge = selected and Kora.lang('Menu.selected') or owned and Kora.lang('Menu.owned') or Kora.lang('Menu.for_sale'),
             tone = selected and 'success' or owned and 'primary' or 'neutral',
             metadata = {
-                { label = 'Top speed', value = ('%.0f mph'):format(GetVehicleModelEstimatedMaxSpeed(joaat(truck.name)) * 2.236936) },
-                { label = 'Price', value = money(truck.price) },
+                { label = Kora.lang('Menu.top_speed'), value = Kora.lang('Format.speed_mph', GetVehicleModelEstimatedMaxSpeed(joaat(truck.name)) * 2.236936) },
+                { label = Kora.lang('Menu.price'), value = money(truck.price) },
             },
             actions = actions,
         }
@@ -658,82 +658,82 @@ local function appDefinition()
     local rep = dashboard.rep
     local xpProgress = rep.XP % 1000
     local activeActions = dashboard.activeJobId and {
-        { id = 'trucker:cancel', label = 'Cancel active contract', icon = 'X', variant = 'destructive',
-            confirm = 'Cancel this contract? No payment or XP will be awarded.' },
+        { id = 'trucker:cancel', label = Kora.lang('Menu.cancel_contract'), icon = 'X', variant = 'destructive',
+            confirm = Kora.lang('Menu.cancel_confirm') },
     } or nil
 
     return {
         id = APP_ID,
-        title = 'Freight Dispatch',
-        description = dashboard.activeJobId and ('Active contract: %s'):format(dashboard.activeJobId) or 'Los Santos freight network',
+        title = Kora.lang('Title.freight_dispatch'),
+        description = dashboard.activeJobId and Kora.lang('Menu.active_contract', dashboard.activeJobId) or Kora.lang('Menu.freight_network'),
         icon = 'Truck',
         width = 1180,
         height = 780,
         navigation = {
             {
-                id = 'contracts', label = 'Contracts', icon = 'ClipboardList', badge = #(dashboard.jobs or {}),
+                id = 'contracts', label = Kora.lang('Menu.contracts'), icon = 'ClipboardList', badge = #(dashboard.jobs or {}),
                 content = {
-                    title = 'Available freight contracts',
-                    description = 'Contracts are filtered by your current skill levels and reserved when accepted.',
+                    title = Kora.lang('Menu.available_contracts'),
+                    description = Kora.lang('Menu.contracts_description'),
                     actions = activeActions,
                     scrollable = false,
                     blocks = {
                         { type = 'list', id = 'contracts', layout = 'cards', searchable = true, scrollable = true,
-                            searchPlaceholder = 'Search cargo or contract ID…', pageSize = 12, items = jobItems(),
-                            empty = 'No freight contracts are available right now.' },
+                            searchPlaceholder = Kora.lang('Menu.search_contracts'), pageSize = 12, items = jobItems(),
+                            empty = Kora.lang('Menu.no_contracts') },
                     },
                 },
             },
             {
-                id = 'skills', label = 'Skills', icon = 'TrendingUp', badge = rep.skillPoints,
+                id = 'skills', label = Kora.lang('Menu.skills'), icon = 'TrendingUp', badge = rep.skillPoints,
                 content = {
-                    title = 'Driver progression',
-                    description = ('You have %d unspent skill point%s.'):format(rep.skillPoints, rep.skillPoints == 1 and '' or 's'),
+                    title = Kora.lang('Menu.driver_progression'),
+                    description = Kora.lang('Menu.unspent_skill_points', rep.skillPoints, rep.skillPoints == 1 and '' or 's'),
                     blocks = {
                         { type = 'stats', items = {
-                            { label = 'Total XP', value = math.floor(rep.XP), icon = 'Star', tone = 'primary' },
-                            { label = 'Skill points', value = rep.skillPoints, icon = 'Sparkles', tone = rep.skillPoints > 0 and 'success' or 'neutral' },
+                            { label = Kora.lang('Menu.total_xp'), value = math.floor(rep.XP), icon = 'Star', tone = 'primary' },
+                            { label = Kora.lang('Menu.skill_points'), value = rep.skillPoints, icon = 'Sparkles', tone = rep.skillPoints > 0 and 'success' or 'neutral' },
                         } },
-                        { type = 'progress', title = 'Next skill point', items = {
-                            { label = 'Experience milestone', value = xpProgress, max = 1000,
-                                detail = ('%d / 1,000 XP'):format(xpProgress), icon = 'Gauge', tone = 'primary' },
+                        { type = 'progress', title = Kora.lang('Menu.next_skill_point'), items = {
+                            { label = Kora.lang('Menu.experience_milestone'), value = xpProgress, max = 1000,
+                                detail = Kora.lang('Format.xp_progress', xpProgress), icon = 'Gauge', tone = 'primary' },
                         } },
                         { type = 'list', id = 'skills', layout = 'cards', items = skillItems() },
                     },
                 },
             },
             {
-                id = 'trucks', label = 'Trucks', icon = 'Truck',
+                id = 'trucks', label = Kora.lang('Menu.trucks'), icon = 'Truck',
                 content = {
-                    title = 'Depot fleet',
-                    description = 'Buy trucks with bank funds and choose which tractor the depot dispatches.',
+                    title = Kora.lang('Menu.depot_fleet'),
+                    description = Kora.lang('Menu.depot_fleet_description'),
                     blocks = {
                         { type = 'list', id = 'trucks', layout = 'cards', items = truckItems() },
                     },
                 },
             },
         },
-        footer = 'Contracts, rewards, skills, and vehicle access are verified by the server.',
+        footer = Kora.lang('Menu.server_verified_footer'),
         onAction = function(actionId, context)
             local itemId = context and context.itemId
             if actionId == 'trucker:accept' then
                 local accepted, err = acceptJob(itemId)
                 if not accepted then return { notice = { tone = 'destructive', message = err } } end
-                return { close = true, notice = { tone = 'success', message = 'Contract accepted.' } }
+                return { close = true, notice = { tone = 'success', message = Kora.lang('Notify.contract_accepted') } }
             elseif actionId == 'trucker:cancel' then
                 local cancelled, err = finishJob(false)
                 if not cancelled then return { notice = { tone = 'destructive', message = err } } end
             elseif actionId == 'trucker:upgrade' then
                 local upgraded, repOrError = Kora.callback.trigger('kora_truckerjob:server:skillUpgraded', itemId)
-                if not upgraded then return { notice = { tone = 'destructive', message = repOrError or 'Skill upgrade failed.' } } end
+                if not upgraded then return { notice = { tone = 'destructive', message = repOrError or Kora.lang('Error.skill_upgrade_failed') } } end
                 dashboard.rep = repOrError
             elseif actionId == 'trucker:purchase' then
                 local purchased, repOrError = Kora.callback.trigger('kora_truckerjob:server:truckPurchased', itemId)
-                if not purchased then return { notice = { tone = 'destructive', message = repOrError or 'Truck purchase failed.' } } end
+                if not purchased then return { notice = { tone = 'destructive', message = repOrError or Kora.lang('Error.truck_purchase_failed') } } end
                 dashboard.rep = repOrError
             elseif actionId == 'trucker:select' then
                 local selected, repOrError = Kora.callback.trigger('kora_truckerjob:server:truckSelected', itemId)
-                if not selected then return { notice = { tone = 'destructive', message = repOrError or 'Truck selection failed.' } } end
+                if not selected then return { notice = { tone = 'destructive', message = repOrError or Kora.lang('Error.truck_selection_failed') } } end
                 dashboard.rep = repOrError
             else
                 error('That trucking action is no longer available.')
@@ -743,7 +743,7 @@ local function appDefinition()
             return {
                 update = { navigation = updated.navigation, description = updated.description },
                 notice = { tone = 'success', message = actionId == 'trucker:cancel'
-                    and 'Contract cancelled. Return your truck to the depot.' or 'Changes saved.' },
+                    and Kora.lang('Notify.contract_cancelled_return') or Kora.lang('Notify.changes_saved') },
             }
         end,
     }
@@ -755,7 +755,7 @@ local function openDispatch()
     CreateThread(function()
         local ok, err = pcall(function()
             local snapshot, loadError = Kora.callback.trigger('kora_truckerjob:server:dashboardRequested')
-            if not snapshot then return notify(loadError or 'Freight dispatch is unavailable.', 'error') end
+            if not snapshot then return notify(loadError or Kora.lang('Error.dispatch_unavailable'), 'error') end
             dashboard = snapshot
             if dashboard.activeJobId and not currentJob then
                 for _, job in ipairs(dashboard.jobs) do
@@ -769,7 +769,7 @@ local function openDispatch()
         appActive = false
         if not ok then
             print(('^1[kora_truckerjob]^7 Freight dispatch failed: %s'):format(tostring(err)))
-            notify('The freight dispatch interface could not be opened.', 'error')
+            notify(Kora.lang('Error.dispatch_open_failed'), 'error')
         end
     end)
 end
@@ -783,7 +783,7 @@ local function registerJobStationTarget()
         debug = Config.Debug,
         options = {
             {
-                label = 'Open freight dispatch',
+                label = Kora.lang('Target.open_dispatch'),
                 icon = 'Truck',
                 onSelect = openDispatch,
             },
@@ -799,12 +799,12 @@ CreateThread(function()
         color = 2,
         scale = 0.8,
         shortRange = true,
-        category = 'Trucking',
-        name = 'Freight Depot',
+        category = Kora.lang('Title.trucking'),
+        name = Kora.lang('Title.freight_depot'),
         info = {
-            title = 'Freight Depot',
+            title = Kora.lang('Title.freight_depot'),
             rows = {
-                { kind = 'wrappedText', value = 'Haul cargo contracts for pay. Open to anyone, no employment required.' },
+                { kind = 'wrappedText', value = Kora.lang('Blip.freight_depot_description') },
             },
         },
     })
@@ -818,7 +818,7 @@ AddEventHandler('gameEventTriggered', function(name, args)
     if name ~= 'CEventNetworkVehicleUndrivable' then return end
     local entity = args[1]
     if currentTrailer and entity == currentTrailer and currentJob then
-        notify('Your trailer was destroyed.', 'error')
+        notify(Kora.lang('Error.trailer_destroyed'), 'error')
         finishJob(false)
     elseif currentTruck and entity == currentTruck then
         local netId = currentTruckNetId
