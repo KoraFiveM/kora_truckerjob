@@ -185,8 +185,8 @@ local function cooldownRemaining(expiresAt, now)
 end
 
 local function formatDuration(seconds)
-    if seconds >= 60 then return ('%dm %02ds'):format(seconds // 60, seconds % 60) end
-    return ('%ds'):format(seconds)
+    if seconds >= 60 then return Kora.lang('Format.minutes_seconds', seconds // 60, seconds % 60) end
+    return Kora.lang('Format.seconds', seconds)
 end
 
 local function cooldownKey(source)
@@ -286,7 +286,7 @@ local function vehicleAtSpawn(coords)
 end
 
 local function spawnVehicle(source, model, vehicleType, coords, plate)
-    if vehicleAtSpawn(coords) then return nil, 'That bay is no longer available.' end
+    if vehicleAtSpawn(coords) then return nil, Kora.lang('Error.bay_unavailable') end
 
     local entity = CreateVehicleServerSetter(joaat(model), vehicleType, coords.x, coords.y, coords.z, coords.w)
     local attempts = 0
@@ -294,7 +294,7 @@ local function spawnVehicle(source, model, vehicleType, coords, plate)
         Wait(0)
         attempts = attempts + 1
     end
-    if not entity or entity == 0 or not DoesEntityExist(entity) then return nil, 'Vehicle creation failed.' end
+    if not entity or entity == 0 or not DoesEntityExist(entity) then return nil, Kora.lang('Error.vehicle_create_failed') end
 
     SetEntityRoutingBucket(entity, GetPlayerRoutingBucket(source))
     if plate then SetVehicleNumberPlateText(entity, plate) end
@@ -307,7 +307,7 @@ local function spawnVehicle(source, model, vehicleType, coords, plate)
     end
     if not netId or netId == 0 then
         DeleteEntity(entity)
-        return nil, 'Vehicle network registration failed.'
+        return nil, Kora.lang('Error.vehicle_network_failed')
     end
     return entity, netId
 end
@@ -329,7 +329,7 @@ CreateThread(function()
 end)
 
 Kora.callback.register('kora_truckerjob:server:dashboardRequested', function(source)
-    if not exports.kora_core:getPlayer(source) then return nil, 'Your character is not available.' end
+    if not exports.kora_core:getPlayer(source) then return nil, Kora.lang('Error.character_unavailable') end
     local _, trucker = normaliseTruckerRep(source)
     ensureQualifyingJob(trucker.skills)
     local availableJobs, activeJobId = jobsForClient(source)
@@ -337,25 +337,25 @@ Kora.callback.register('kora_truckerjob:server:dashboardRequested', function(sou
 end, { rateLimit = { max = 5, window = 5000 } })
 
 Kora.callback.register('kora_truckerjob:server:jobAccepted', function(source, jobId)
-    if type(jobId) ~= 'string' then return false, 'Invalid job.' end
-    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
+    if type(jobId) ~= 'string' then return false, Kora.lang('Error.invalid_job') end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, Kora.lang('Error.too_far_depot') end
 
     local job = jobs[jobId]
-    if not job then return false, 'This job is no longer available.' end
-    if job.active then return false, 'This job has already been taken.' end
-    if activeJobFor(source) then return false, 'You already have an active job.' end
+    if not job then return false, Kora.lang('Error.job_unavailable') end
+    if job.active then return false, Kora.lang('Error.job_taken') end
+    if activeJobFor(source) then return false, Kora.lang('Error.active_job_exists') end
 
     local remaining = cooldownRemaining(cooldowns[cooldownKey(source)], os.time())
     if remaining > 0 then
-        local message = ('Your next contract is available in %s.'):format(formatDuration(remaining))
-        Kora.notify.send(source, { title = 'Trucking', message = message, type = 'error' })
+        local message = Kora.lang('Notify.contract_cooldown', formatDuration(remaining))
+        Kora.notify.send(source, { title = Kora.lang('Title.trucking'), message = message, type = 'error' })
         return false, message
     end
 
     local _, trucker = normaliseTruckerRep(source)
-    if job.distanceLevel > trucker.skills.distance then return false, 'Increase your distance skill to take this job.' end
-    if job.cargoLevel > trucker.skills.cargo then return false, 'Increase your cargo skill to handle this load.' end
-    if job.timeLevel and job.timeLevel > trucker.skills.time then return false, 'Increase your time skill to take this expedited job.' end
+    if job.distanceLevel > trucker.skills.distance then return false, Kora.lang('Error.distance_skill_required') end
+    if job.cargoLevel > trucker.skills.cargo then return false, Kora.lang('Error.cargo_skill_required') end
+    if job.timeLevel and job.timeLevel > trucker.skills.time then return false, Kora.lang('Error.time_skill_required') end
 
     job.active = source
     local duration = 300 + math.floor(job.distance / 1000) * 60
@@ -367,40 +367,40 @@ Kora.callback.register('kora_truckerjob:server:jobAccepted', function(source, jo
 end, { rateLimit = { max = 3, window = 5000 } })
 
 Kora.callback.register('kora_truckerjob:server:vehicleRequested', function(source, kind, jobId, spawnId)
-    if kind ~= 'truck' and kind ~= 'trailer' then return nil, 'Invalid vehicle type.' end
-    if type(jobId) ~= 'string' or not isInteger(spawnId) then return nil, 'Invalid vehicle request.' end
+    if kind ~= 'truck' and kind ~= 'trailer' then return nil, Kora.lang('Error.invalid_vehicle_type') end
+    if type(jobId) ~= 'string' or not isInteger(spawnId) then return nil, Kora.lang('Error.invalid_vehicle_request') end
 
     local job = jobs[jobId]
-    if not job or job.active ~= source then return nil, 'This is not your active job.' end
+    if not job or job.active ~= source then return nil, Kora.lang('Error.not_active_job') end
     local state = spawnedVehicles[source] or { jobId = jobId }
     spawnedVehicles[source] = state
 
     if kind == 'truck' then
-        if not playerIsNear(source, Config.Coords.JobStation, 20.0) then return nil, 'You are too far from the depot.' end
+        if not playerIsNear(source, Config.Coords.JobStation, 20.0) then return nil, Kora.lang('Error.too_far_depot') end
         local coords = Config.Coords.TruckSpawns[spawnId]
-        if not coords then return nil, 'Invalid truck bay.' end
-        if state.truck and DoesEntityExist(state.truck) then return nil, 'You already have a truck in use.' end
+        if not coords then return nil, Kora.lang('Error.invalid_truck_bay') end
+        if state.truck and DoesEntityExist(state.truck) then return nil, Kora.lang('Error.truck_in_use') end
 
         local _, trucker = normaliseTruckerRep(source)
         local truck = truckDefinition(trucker.activeTruck)
-        if not truck or not trucker.trucks[truck.name] then return nil, 'Your selected truck is unavailable.' end
+        if not truck or not trucker.trucks[truck.name] then return nil, Kora.lang('Error.selected_truck_unavailable') end
         local plate = ('TRK%s'):format(jobId):sub(1, 8)
         local entity, netId = spawnVehicle(source, truck.name, 'automobile', coords, plate)
         if not entity then return nil, netId end
         -- Server-side spawn: the plate set by spawnVehicle is final, so keys are issued for it here.
         if not giveTruckKeys(source, plate) then
             DeleteEntity(entity)
-            return nil, 'Vehicle keys could not be issued.'
+            return nil, Kora.lang('Error.vehicle_keys_failed')
         end
         state.truck = entity
         state.plate = plate
         return netId
     end
 
-    if not playerIsNear(source, Config.Coords.TrailerLocator, 12.0) then return nil, 'You are too far from the trailer office.' end
+    if not playerIsNear(source, Config.Coords.TrailerLocator, 12.0) then return nil, Kora.lang('Error.too_far_trailer_office') end
     local coords = Config.Coords.TrailerSpawns[spawnId]
-    if not coords then return nil, 'Invalid trailer bay.' end
-    if state.trailer and DoesEntityExist(state.trailer) then return nil, 'Your trailer has already been dispatched.' end
+    if not coords then return nil, Kora.lang('Error.invalid_trailer_bay') end
+    if state.trailer and DoesEntityExist(state.trailer) then return nil, Kora.lang('Error.trailer_already_dispatched') end
     local entity, netId = spawnVehicle(source, job.cargo.trailer, 'trailer', coords)
     if not entity then return nil, netId end
     state.trailer = entity
@@ -408,9 +408,9 @@ Kora.callback.register('kora_truckerjob:server:vehicleRequested', function(sourc
 end, { rateLimit = { max = 4, window = 10000 } })
 
 Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, jobId, successful, trailerNetId)
-    if type(jobId) ~= 'string' or type(successful) ~= 'boolean' then return false, 'Invalid completion request.' end
+    if type(jobId) ~= 'string' or type(successful) ~= 'boolean' then return false, Kora.lang('Error.invalid_completion') end
     local job = jobs[jobId]
-    if not job or job.active ~= source then return false, 'This job is not active.' end
+    if not job or job.active ~= source then return false, Kora.lang('Error.not_active_job') end
 
     local state = spawnedVehicles[source] or {}
     if not successful then
@@ -422,16 +422,16 @@ Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, j
         return true, { failed = true }
     end
 
-    if not isInteger(trailerNetId) or trailerNetId <= 0 then return false, 'The assigned trailer could not be verified.' end
+    if not isInteger(trailerNetId) or trailerNetId <= 0 then return false, Kora.lang('Error.trailer_verify_failed') end
     local trailer = NetworkGetEntityFromNetworkId(trailerNetId)
     if not trailer or trailer == 0 or trailer ~= state.trailer or not DoesEntityExist(trailer) then
-        return false, 'The assigned trailer could not be verified.'
+        return false, Kora.lang('Error.trailer_verify_failed')
     end
-    if not playerIsNear(source, job.coords, 25.0) then return false, 'You are too far from the delivery point.' end
+    if not playerIsNear(source, job.coords, 25.0) then return false, Kora.lang('Error.too_far_delivery') end
     if GetEntityAttachedTo(trailer) ~= 0
         or #(GetEntityCoords(trailer) - vector3(job.coords.x, job.coords.y, job.coords.z)) > 5.0
         or headingDifference(GetEntityHeading(trailer), job.coords.w) > 10.0 then
-        return false, 'Park the trailer fully inside the delivery marker.'
+        return false, Kora.lang('Error.trailer_not_parked')
     end
 
     local payout = math.floor(job.distance * Config.PayPerMeter)
@@ -441,7 +441,7 @@ Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, j
     if damaged then payout = payout - math.floor(payout / Config.DamagePenalty) end
 
     local paid, payError = exports.kora_core:addMoney(source, 'cash', payout, 'trucker-completed-job')
-    if not paid then return false, payError or 'Payment failed.' end
+    if not paid then return false, payError or Kora.lang('Error.payment_failed') end
 
     local rep, trucker = normaliseTruckerRep(source)
     local xpReward = Config.XPReward
@@ -471,47 +471,47 @@ Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, j
 end, { rateLimit = { max = 3, window = 10000 } })
 
 Kora.callback.register('kora_truckerjob:server:skillUpgraded', function(source, skill)
-    if skill ~= 'distance' and skill ~= 'cargo' and skill ~= 'time' then return false, 'Invalid skill.' end
+    if skill ~= 'distance' and skill ~= 'cargo' and skill ~= 'time' then return false, Kora.lang('Error.invalid_skill') end
     local rep, trucker = normaliseTruckerRep(source)
-    if trucker.skillPoints < 1 then return false, 'You do not have enough skill points.' end
-    if trucker.skills[skill] >= 4 then return false, 'That skill is already at its maximum level.' end
+    if trucker.skillPoints < 1 then return false, Kora.lang('Error.no_skill_points') end
+    if trucker.skills[skill] >= 4 then return false, Kora.lang('Error.skill_max_level') end
 
     trucker.skills[skill] = trucker.skills[skill] + 1
     trucker.skillPoints = trucker.skillPoints - 1
     local saved, saveError = setTruckerRep(source, rep, trucker)
-    if not saved then return false, saveError or 'The skill upgrade could not be saved.' end
+    if not saved then return false, saveError or Kora.lang('Error.skill_save_failed') end
     return true, trucker
 end, { rateLimit = { max = 4, window = 5000 } })
 
 Kora.callback.register('kora_truckerjob:server:truckPurchased', function(source, spawnName)
     local truck = truckDefinition(spawnName)
-    if not truck or truck.price <= 0 then return false, 'That truck is not for sale.' end
-    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
+    if not truck or truck.price <= 0 then return false, Kora.lang('Error.truck_not_for_sale') end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, Kora.lang('Error.too_far_depot') end
 
     local rep, trucker = normaliseTruckerRep(source)
-    if trucker.trucks[truck.name] then return false, 'You already own this truck.' end
+    if trucker.trucks[truck.name] then return false, Kora.lang('Error.truck_already_owned') end
     local paid, paymentError = exports.kora_core:removeMoney(source, 'bank', truck.price, 'trucker-purchase-truck')
-    if not paid then return false, paymentError or 'You do not have enough money in the bank.' end
+    if not paid then return false, paymentError or Kora.lang('Error.not_enough_bank_money') end
 
     trucker.trucks[truck.name] = true
     local saved, saveError = setTruckerRep(source, rep, trucker)
     if not saved then
         exports.kora_core:addMoney(source, 'bank', truck.price, 'trucker-purchase-refund')
-        return false, saveError or 'The truck purchase could not be saved.'
+        return false, saveError or Kora.lang('Error.truck_purchase_save_failed')
     end
     return true, trucker
 end, { rateLimit = { max = 2, window = 5000 } })
 
 Kora.callback.register('kora_truckerjob:server:truckSelected', function(source, spawnName)
     local truck = truckDefinition(spawnName)
-    if not truck then return false, 'That truck is unavailable.' end
-    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, 'You are too far from the depot.' end
+    if not truck then return false, Kora.lang('Error.truck_unavailable') end
+    if not playerIsNear(source, Config.Coords.JobStation, 15.0) then return false, Kora.lang('Error.too_far_depot') end
 
     local rep, trucker = normaliseTruckerRep(source)
-    if not trucker.trucks[truck.name] then return false, 'You do not own this truck.' end
+    if not trucker.trucks[truck.name] then return false, Kora.lang('Error.truck_not_owned') end
     trucker.activeTruck = truck.name
     local saved, saveError = setTruckerRep(source, rep, trucker)
-    if not saved then return false, saveError or 'The truck selection could not be saved.' end
+    if not saved then return false, saveError or Kora.lang('Error.truck_selection_save_failed') end
     return true, trucker
 end, { rateLimit = { max = 3, window = 5000 } })
 
@@ -540,7 +540,7 @@ Kora.callback.register('kora_truckerjob:server:vehicleReturned', function(source
     -- Only the truck must be brought back; trailers are also released when a contract is abandoned or fails.
     if kind == 'truck' and not vehicleIsWrecked(entity) and not vehicleIsAtReturn(entity) then
         -- No notify here: the client shows this once per return-zone visit (Config.Return.awayMode).
-        return false, (Config.Return or {}).awayMessage or 'Bring the truck to the return point first.'
+        return false, (Config.Return or {}).awayMessage or Kora.lang('Error.truck_return_required')
     end
     if exists then deleteEntity(entity) end
     state[kind] = nil
