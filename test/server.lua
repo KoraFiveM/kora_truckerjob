@@ -31,8 +31,21 @@ local playerCoords
 local nextEntity = 200
 local idCounter = 0
 local paid
+local saveFails = false
+local logged = {}
 
-Kora = { callback = {}, notify = {} }
+-- Kora.lang stand-in that resolves dotted keys from the resource's own en locale.
+local locale = assert(loadfile(resourceRoot .. '/locales/en.lua'))()
+local function lang(key, ...)
+    local value = locale
+    for part in key:gmatch('[^.]+') do value = type(value) == 'table' and value[part] or nil end
+    if type(value) ~= 'string' then return key end
+    return select('#', ...) > 0 and value:format(...) or value
+end
+Kora = { callback = {}, notify = {}, lang = lang }
+Kora.logging = setmetatable({}, { __index = function(_, level)
+    return function(event, message, fields) logged[#logged + 1] = { level = level, event = event, message = message, fields = fields }; return true end
+end })
 local notifications = {}
 function Kora.notify.send(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
 local keyCalls = { given = {}, removed = {} }
@@ -44,7 +57,11 @@ exports = {
         getPlayerData = function() return nil end,
         getPlayer = function(_, source) return source == 1 and { source = source } or nil end,
         getMetaData = function(_, _, key) return metadata[key] end,
-        setMetaData = function(_, _, key, value) metadata[key] = value; return true end,
+        setMetaData = function(_, _, key, value)
+            if saveFails then return false, 'db down' end
+            metadata[key] = value
+            return true
+        end,
         randomStr = function() idCounter = idCounter + 1; return ('JOB%d'):format(idCounter) end,
         randomInt = function() return '001' end,
         addMoney = function(_, _, account, amount) paid = { account = account, amount = amount }; return true end,
@@ -118,8 +135,14 @@ Config.ContractCooldown = 60
 local fakeNow = os.time()
 local realTime = os.time
 os.time = function() return fakeNow end
+saveFails = true
 local completed, result = callbacks['kora_truckerjob:server:jobCompleted'](1, job.id, true, trailerNetId)
+saveFails = false
 assert(completed and result.payout > 0 and paid.amount == result.payout, 'verified delivery should pay through kora_core')
+-- Behavioural: a failed XP save after payment is logged through Kora.logging, not printed.
+assert(#logged == 1, 'the failed XP save is logged once')
+assert(logged[1].level == 'error' and logged[1].event == 'xp.save_failed', 'error level with a stable event name')
+assert(logged[1].fields.playerId == 1 and logged[1].fields.error == 'db down', 'fields carry the player and the error')
 assert(metadata.rep.trucker.XP > 0, 'verified delivery should persist trucking XP')
 
 -- Contract cooldown: completing a job blocks the next accept until the configured time passes.

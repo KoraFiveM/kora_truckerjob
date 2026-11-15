@@ -768,7 +768,7 @@ local function openDispatch()
         dashboard = nil
         appActive = false
         if not ok then
-            print(('^1[kora_truckerjob]^7 Freight dispatch failed: %s'):format(tostring(err)))
+            Kora.logging.error('dispatch.open_failed', 'Freight dispatch failed to open', { error = tostring(err) })
             notify(Kora.lang('Error.dispatch_open_failed'), 'error')
         end
     end)

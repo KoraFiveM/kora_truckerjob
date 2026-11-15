@@ -5,3 +5,4 @@ resource_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 luac -p "$resource_root/config.lua" "$resource_root/server.lua" "$resource_root/client/client.lua" "$resource_root/fxmanifest.lua"
 lua "$resource_root/test/server.lua" "$resource_root"
 lua "$resource_root/test/client.lua" "$resource_root"
+(cd "$resource_root" && lua test/no_raw_print.lua)
