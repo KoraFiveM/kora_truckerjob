@@ -455,7 +455,10 @@ Kora.callback.register('kora_truckerjob:server:jobCompleted', function(source, j
     trucker.skillPoints = trucker.skillPoints + skillPointsGained
     local saved, saveError = setTruckerRep(source, rep, trucker)
     if not saved then
-        print(('^1[kora_truckerjob]^7 Paid player %d but could not save trucking XP: %s'):format(source, saveError or 'unknown error'))
+        Kora.logging.error('xp.save_failed', 'Player was paid but trucking XP could not be saved', {
+            playerId = source,
+            error = tostring(saveError or 'unknown error'),
+        })
     end
 
     jobs[jobId] = nil
