@@ -83,7 +83,7 @@ return {
         xp_progress = '%d / 1,000 XP',
     },
     Prompt = {
-        arrival_instructions = 'Back the trailer into the marked bay, then detach it with {key}.',
+        arrival_instructions = 'Back the trailer into the marked bay (it turns green when aligned), then detach it with {key}.',
         detach_trailer = 'Press {key} to detach the trailer and deliver',
         dispatch_trailer = 'Press E to dispatch your assigned trailer',
         exit_to_return = 'Exit the vehicle to return the truck',

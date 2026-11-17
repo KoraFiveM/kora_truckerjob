@@ -39,4 +39,4 @@ The app data is loaded from the server when opened (rate limited to 5 requests p
 
 Players can rebind them in the game key binding settings. If the keybind options are `false` the resource polls `Config.TrailerPickup.key` and `Config.Delivery.detachKey` per frame instead. See [Configuration](./configuration.md).
 
-Texts are English literals in the code and config; the resource has no locale files.
+Texts come from the locale files (`locales/<language>.lua`) in each player's language. A text set in `config.lua` replaces the translation in every language; the shipped config still sets the truck return, trailer pickup and lost-vehicle texts in English, while the delivery prompts (`Config.Delivery`) use the translations.

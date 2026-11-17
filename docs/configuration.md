@@ -74,9 +74,9 @@ All options are in `config.lua` (a shared script, loaded on client and server). 
 | `detachKeybind` | `'H'` | Rebindable key name `kora_truckerjob_detach`, registered only while the delivery bay is active |
 | `checkInterval` | `250` | Milliseconds between parked and attached checks |
 | `detachKeyLabel` | `'H'` | Key name inserted for `{key}` in the texts. Not updated when the keybind changes |
-| `approachText` | `'Reverse the trailer into the marker'` | Shown until the trailer is lined up |
-| `detachText` | `'Press {key} to detach the trailer and deliver'` | Shown when parked but hitched |
-| `arrivalMessage` | `'Back the trailer into the marked bay (it turns green when aligned), then detach it with {key}.'` | Arrival notification |
+| `approachText` | `nil` | Shown until the trailer is lined up. `nil` uses the translated `Prompt.reverse_trailer` ("Reverse the trailer into the marker"); a string replaces it in every language |
+| `detachText` | `nil` | Shown when parked but hitched. `nil` uses the translated `Prompt.detach_trailer` ("Press `{key}` to detach the trailer and deliver"); a string replaces it in every language |
+| `arrivalMessage` | `nil` | Arrival notification. `nil` uses the translated `Prompt.arrival_instructions` ("Back the trailer into the marked bay (it turns green when aligned), then detach it with `{key}`."); a string replaces it in every language |
 
 ## Lost vehicles
 
