@@ -46,9 +46,10 @@ Config = {
         detachKeybind = 'H', -- Rebindable key name registered only while the delivery bay is active. false = poll Config.Delivery.detachKey instead
         checkInterval = 250, -- Milliseconds between parked/attached checks and prompt updates (the marker is still drawn every frame when showMarker is true)
         detachKeyLabel = 'H', -- Key name shown in the prompts
-        approachText = 'Reverse the trailer into the marker', -- Shown until the trailer is lined up
-        detachText = 'Press {key} to detach the trailer and deliver', -- Shown when parked but still hitched; {key} = detachKeyLabel
-        arrivalMessage = 'Back the trailer into the marked bay (it turns green when aligned), then detach it with {key}.',
+        -- The three texts below are nil so players get the translated locale prompt; a string here overrides it in every language.
+        approachText = nil, -- Shown until the trailer is lined up (locale: Prompt.reverse_trailer)
+        detachText = nil, -- Shown when parked but still hitched; {key} = detachKeyLabel (locale: Prompt.detach_trailer)
+        arrivalMessage = nil, -- Notification on entering the delivery area; {key} = detachKeyLabel (locale: Prompt.arrival_instructions)
     },
 
     TruckLost = {

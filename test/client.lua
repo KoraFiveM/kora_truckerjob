@@ -85,7 +85,16 @@ local function setCache(key, value)
     cacheState[key] = value
     for _, handler in ipairs(cacheHandlers[key] or {}) do handler(value, old) end
 end
+-- Kora.lang stand-in that resolves dotted keys from the resource's own en locale.
+local locale = assert(loadfile(resourceRoot .. '/locales/en.lua'))()
+local function lang(key, ...)
+    local value = locale
+    for part in key:gmatch('[^.]+') do value = type(value) == 'table' and value[part] or nil end
+    if type(value) ~= 'string' then return key end
+    return select('#', ...) > 0 and value:format(...) or value
+end
 Kora = {
+    lang = lang,
     cache = {
         vehicle = function() return cacheState.vehicle end,
         seat = function() return cacheState.seat end,
