@@ -1,5 +1,6 @@
 fx_version 'cerulean'
 game 'gta5'
+dependency 'kora_lib'
 lua54 'yes'
 author 'Kora'
 description 'Trucking job to haul cargo for money with an integrated skill system'
@@ -36,3 +37,5 @@ this_is_a_map 'yes'
 
 -- kora_qa: Gherkin test scenarios (converted legacy tests), see [kora]/kora_qa/README.md
 qa_feature 'tests/*.feature'
+
+server_script 'kora_versioncheck.lua'
