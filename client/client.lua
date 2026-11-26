@@ -24,7 +24,7 @@ local returnPrompt
 local jobStationTarget
 
 local function notify(message, type_)
-    Kora.notify.send({ title = Kora.lang('Title.trucking'), message = message, type = type_ or 'info' })
+    Kora.bridge.sendNotify({ title = Kora.lang('Title.trucking'), message = message, type = type_ or 'info' })
 end
 
 local function money(value)
@@ -47,17 +47,17 @@ local function setRoute(coords)
 end
 
 local function clearPrompt()
-    if returnPrompt then Kora.textui.hide(returnPrompt.id); returnPrompt = nil end
+    if returnPrompt then Kora.bridge.hideText(returnPrompt.id); returnPrompt = nil end
 end
 
 local function setReturnPrompt(state, text)
     if returnPrompt and returnPrompt.state == state then return end
     clearPrompt()
-    returnPrompt = { state = state, id = Kora.textui.show(text, { icon = 'Truck', position = 'right-center' }) }
+    returnPrompt = { state = state, id = Kora.bridge.drawText(text, { icon = 'Truck', position = 'right-center' }) }
 end
 
 local function clearTrailerPrompt()
-    if trailerPrompt then Kora.textui.hide(trailerPrompt); trailerPrompt = nil end
+    if trailerPrompt then Kora.bridge.hideText(trailerPrompt); trailerPrompt = nil end
     if trailerKeybind then trailerKeybind.remove(); trailerKeybind = nil end
 end
 
@@ -68,13 +68,13 @@ local function clearTrailerTarget()
 end
 
 local function clearDeliveryPrompt()
-    if deliveryPrompt then Kora.textui.hide(deliveryPrompt.id); deliveryPrompt = nil end
+    if deliveryPrompt then Kora.bridge.hideText(deliveryPrompt.id); deliveryPrompt = nil end
 end
 
 local function setDeliveryPrompt(state, text)
     if deliveryPrompt and deliveryPrompt.state == state then return end
     clearDeliveryPrompt()
-    deliveryPrompt = { state = state, id = Kora.textui.show(text, { icon = 'Truck', position = 'right-center' }) }
+    deliveryPrompt = { state = state, id = Kora.bridge.drawText(text, { icon = 'Truck', position = 'right-center' }) }
 end
 
 local function clearDropoffZone()
@@ -443,7 +443,7 @@ local function createTrailerZone()
         onEnter = function()
             if trailerPrompt or currentTrailer then return end
             if settings.allowInVehicle == false and GetVehiclePedIsIn(PlayerPedId(), false) ~= 0 then return end
-            trailerPrompt = Kora.textui.show(settings.prompt or Kora.lang('Prompt.dispatch_trailer'), {
+            trailerPrompt = Kora.bridge.drawText(settings.prompt or Kora.lang('Prompt.dispatch_trailer'), {
                 icon = 'Truck', position = 'right-center',
             })
             if type(keybindKey) == 'string' and keybindKey ~= '' then
