@@ -24,7 +24,7 @@ local returnPrompt
 local jobStationTarget
 
 local function notify(message, type_)
-    Kora.notify.send({ title = Kora.lang('Title.trucking'), message = message, type = type_ or 'info' })
+    Kora.bridge.sendNotify({ title = Kora.lang('Title.trucking'), message = message, type = type_ or 'info' })
 end
 
 local function money(value)

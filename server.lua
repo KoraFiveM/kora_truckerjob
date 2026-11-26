@@ -348,7 +348,7 @@ Kora.callback.register('kora_truckerjob:server:jobAccepted', function(source, jo
     local remaining = cooldownRemaining(cooldowns[cooldownKey(source)], os.time())
     if remaining > 0 then
         local message = Kora.lang('Notify.contract_cooldown', formatDuration(remaining))
-        Kora.notify.send(source, { title = Kora.lang('Title.trucking'), message = message, type = 'error' })
+        Kora.bridge.sendNotify(source, { title = Kora.lang('Title.trucking'), message = message, type = 'error' })
         return false, message
     end
 

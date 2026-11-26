@@ -47,7 +47,7 @@ Kora.logging = setmetatable({}, { __index = function(_, level)
     return function(event, message, fields) logged[#logged + 1] = { level = level, event = event, message = message, fields = fields }; return true end
 end })
 local notifications = {}
-function Kora.notify.send(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
+function Kora.bridge.sendNotify(source, payload) notifications[#notifications + 1] = { source = source, payload = payload } end
 local keyCalls = { given = {}, removed = {} }
 local keysResult = true
 function Kora.callback.register(name, handler) callbacks[name] = handler end
