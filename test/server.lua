@@ -42,7 +42,7 @@ local function lang(key, ...)
     if type(value) ~= 'string' then return key end
     return select('#', ...) > 0 and value:format(...) or value
 end
-Kora = { callback = {}, notify = {}, lang = lang }
+Kora = { callback = {}, notify = {}, bridge = {}, lang = lang }
 Kora.logging = setmetatable({}, { __index = function(_, level)
     return function(event, message, fields) logged[#logged + 1] = { level = level, event = event, message = message, fields = fields }; return true end
 end })
